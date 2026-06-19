@@ -202,6 +202,10 @@ body.fish-prize {
   cursor: default;
 }
 
+body.runner-game {
+  cursor: default;
+}
+
 .log {
   justify-self: start;
   max-width: 320px;

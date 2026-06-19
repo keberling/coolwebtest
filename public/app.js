@@ -40,6 +40,21 @@ let fishPrizeActive = false;
 let fishPrizeStart = 0;
 let fishBubbles = [];
 let fishSparkles = [];
+let runnerActive = false;
+let runnerGameOver = false;
+let runnerScore = 0;
+let runnerBest = 0;
+let runnerSpeed = 7;
+let runnerFishY = 0;
+let runnerFishVy = 0;
+let runnerBoats = [];
+let runnerSpawnTimer = 0;
+let runnerGroundY = 0;
+let runnerWaveOffset = 0;
+
+const RUNNER_GRAVITY = 0.65;
+const RUNNER_JUMP = -13.5;
+const RUNNER_FISH_X = 90;
 
 const palette = ['#00f5d4', '#9b5de5', '#fee440', '#f15bb5', '#00bbf9', '#ff6b6b', '#06d6a0'];
 
@@ -48,6 +63,7 @@ function resize() {
   height = canvas.height = window.innerHeight;
   wormCanvas.width = width;
   wormCanvas.height = height;
+  if (runnerActive) runnerGroundY = getRunnerGroundY();
   initStars();
 }
 
@@ -980,6 +996,239 @@ function initFishPrizeFx() {
   }));
 }
 
+function getRunnerGroundY() {
+  return height - Math.max(70, height * 0.14);
+}
+
+function drawRunnerFish(x, y, jumping) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(jumping ? -0.35 : 0);
+
+  ctx.fillStyle = '#ff6b35';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 28, 16, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#e85d04';
+  ctx.beginPath();
+  ctx.moveTo(-26, 0);
+  ctx.lineTo(-42, -14);
+  ctx.lineTo(-38, 0);
+  ctx.lineTo(-42, 14);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = '#f48c06';
+  ctx.beginPath();
+  ctx.moveTo(4, -14);
+  ctx.lineTo(10, -26);
+  ctx.lineTo(18, -14);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(14, -5, 7, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#023047';
+  ctx.beginPath();
+  ctx.arc(16, -5, 3.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function spawnRunnerBoat() {
+  const scale = rand(0.45, 0.75);
+  runnerBoats.push({
+    x: width + 60,
+    scale,
+    width: 90 * scale,
+    height: 55 * scale,
+    hullColor: pickColor(),
+    sailColor: pickColor(),
+  });
+}
+
+function resetRunnerState() {
+  runnerScore = 0;
+  runnerSpeed = 7;
+  runnerFishY = 0;
+  runnerFishVy = 0;
+  runnerBoats = [];
+  runnerSpawnTimer = 90;
+  runnerWaveOffset = 0;
+  runnerGroundY = getRunnerGroundY();
+}
+
+function startRunnerGame() {
+  clearTimeout(nextEffectTimeout);
+  runnerActive = true;
+  runnerGameOver = false;
+  resetRunnerState();
+  document.body.classList.add('runner-game');
+  document.body.classList.remove('worm-game', 'fish-prize');
+  wormScoreEl.classList.add('hidden');
+  setEffectName('Fish Jump!');
+  logEffect('Fish jump game');
+  skipHint.textContent = 'space to jump over boats';
+  countdownBar.style.transform = 'scaleX(0)';
+  countdownText.textContent = '0';
+}
+
+function endRunnerGame() {
+  runnerActive = false;
+  runnerGameOver = false;
+  document.body.classList.remove('runner-game');
+  skipHint.textContent = 'click to skip · spacebar for fish jump';
+  triggerRandomEffect();
+  scheduleNextEffect();
+}
+
+function restartRunnerGame() {
+  runnerGameOver = false;
+  resetRunnerState();
+  setEffectName('Fish Jump!');
+  skipHint.textContent = 'space to jump over boats';
+}
+
+function runnerJump() {
+  if (runnerGameOver) {
+    restartRunnerGame();
+    return;
+  }
+  if (runnerFishY >= -1 && runnerFishVy >= 0) {
+    runnerFishVy = RUNNER_JUMP;
+  }
+}
+
+function checkRunnerCollision() {
+  const fishLeft = RUNNER_FISH_X + 6;
+  const fishRight = RUNNER_FISH_X + 46;
+  const fishBottom = runnerGroundY + runnerFishY;
+  const fishTop = fishBottom - 34;
+
+  for (const boat of runnerBoats) {
+    const boatLeft = boat.x + 8;
+    const boatRight = boat.x + boat.width - 8;
+    const boatBottom = runnerGroundY + 4;
+    const boatTop = runnerGroundY - boat.height + 12;
+
+    if (fishRight > boatLeft && fishLeft < boatRight && fishBottom > boatTop && fishTop < boatBottom) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function updateRunner() {
+  if (!runnerGameOver) {
+    runnerFishVy += RUNNER_GRAVITY;
+    runnerFishY += runnerFishVy;
+    if (runnerFishY > 0) {
+      runnerFishY = 0;
+      runnerFishVy = 0;
+    }
+
+    runnerSpawnTimer -= 1;
+    if (runnerSpawnTimer <= 0) {
+      spawnRunnerBoat();
+      runnerSpawnTimer = Math.max(45, 130 - runnerScore * 0.35);
+    }
+
+    runnerBoats.forEach((boat) => {
+      boat.x -= runnerSpeed;
+    });
+    runnerBoats = runnerBoats.filter((boat) => boat.x > -120);
+
+    runnerScore += 1;
+    runnerSpeed = 7 + Math.floor(runnerScore / 400) * 0.5;
+    runnerWaveOffset += 0.08;
+
+    if (checkRunnerCollision()) {
+      runnerGameOver = true;
+      runnerBest = Math.max(runnerBest, runnerScore);
+      setEffectName('Splashed!');
+      logEffect(`Fish jump score: ${runnerScore}`);
+      skipHint.textContent = 'space to retry · click to quit';
+    }
+  }
+
+  fullClear();
+
+  const sky = ctx.createLinearGradient(0, 0, 0, runnerGroundY);
+  sky.addColorStop(0, '#050818');
+  sky.addColorStop(1, '#0c2a4a');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, width, runnerGroundY);
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+  for (let i = 0; i < 4; i++) {
+    const cx = ((i * 280 - runnerScore * 0.4) % (width + 200)) - 100;
+    const cy = 50 + i * 35;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 18, 0, Math.PI * 2);
+    ctx.arc(cx + 22, cy - 6, 14, 0, Math.PI * 2);
+    ctx.arc(cx + 40, cy, 16, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const sea = ctx.createLinearGradient(0, runnerGroundY - 20, 0, height);
+  sea.addColorStop(0, '#0a4d6e');
+  sea.addColorStop(1, '#021a2b');
+  ctx.fillStyle = sea;
+  ctx.fillRect(0, runnerGroundY - 15, width, height - runnerGroundY + 15);
+
+  ctx.strokeStyle = 'rgba(0, 245, 212, 0.35)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let x = 0; x <= width; x += 8) {
+    const y = runnerGroundY + Math.sin(x * 0.02 + runnerWaveOffset) * 5;
+    if (x === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  runnerBoats.forEach((boat) => {
+    ctx.save();
+    ctx.translate(boat.x, runnerGroundY);
+    ctx.scale(boat.scale, boat.scale);
+    drawBoat(0, 0, 1, boat.hullColor, boat.sailColor, 1);
+    ctx.restore();
+  });
+
+  const fishY = runnerGroundY - 22 + runnerFishY;
+  drawRunnerFish(RUNNER_FISH_X, fishY, runnerFishVy < -2);
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+  ctx.font = '600 18px JetBrains Mono, monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText(`SCORE ${String(Math.floor(runnerScore / 10)).padStart(5, '0')}`, width - 24, 36);
+  if (runnerBest > 0) {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+    ctx.fillText(`BEST ${String(Math.floor(runnerBest / 10)).padStart(5, '0')}`, width - 24, 58);
+  }
+
+  countdownBar.style.transform = `scaleX(${Math.min(1, (runnerScore % 1000) / 1000)})`;
+  countdownText.textContent = String(Math.floor(runnerScore / 10));
+
+  if (runnerGameOver) {
+    ctx.fillStyle = 'rgba(7, 7, 13, 0.55)';
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 42px Space Grotesk, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('SPLASH!', width / 2, height / 2 - 30);
+    ctx.font = '20px Space Grotesk, sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.fillText(`Score: ${Math.floor(runnerScore / 10)}`, width / 2, height / 2 + 10);
+    ctx.font = '14px JetBrains Mono, monospace';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.fillText('SPACE to retry  ·  CLICK to quit', width / 2, height / 2 + 50);
+  }
+}
+
 function endWormGame() {
   wormActive = false;
   wormHits = 0;
@@ -991,7 +1240,7 @@ function endWormGame() {
   wormProgress = 0;
   document.body.classList.remove('worm-game');
   wormScoreEl.classList.add('hidden');
-  skipHint.textContent = 'click anywhere to skip';
+  skipHint.textContent = 'click to skip · spacebar for fish jump';
 }
 
 function triggerFishPrize() {
@@ -1009,7 +1258,7 @@ function triggerFishPrize() {
   setTimeout(() => {
     fishPrizeActive = false;
     document.body.classList.remove('fish-prize');
-    skipHint.textContent = 'click anywhere to skip';
+    skipHint.textContent = 'click to skip · spacebar for fish jump';
     triggerRandomEffect();
     scheduleNextEffect();
   }, FISH_PRIZE_MS);
@@ -1118,8 +1367,27 @@ function handleWormClick(x, y) {
   }
 }
 
+function handleKeydown(e) {
+  if (e.code !== 'Space' || e.repeat) return;
+  e.preventDefault();
+
+  if (fishPrizeActive || wormActive) return;
+
+  if (runnerActive) {
+    runnerJump();
+    return;
+  }
+
+  startRunnerGame();
+}
+
 function handleClick(e) {
   if (fishPrizeActive) return;
+
+  if (runnerActive) {
+    if (runnerGameOver) endRunnerGame();
+    return;
+  }
 
   if (wormActive) {
     handleWormClick(e.clientX, e.clientY);
@@ -1140,6 +1408,8 @@ function handleClick(e) {
 function animate() {
   if (fishPrizeActive) {
     drawHugeFish(Date.now());
+  } else if (runnerActive) {
+    updateRunner();
   } else if (wormActive) {
     if (activeEffect) activeEffect.draw();
     updateWorm();
@@ -1147,7 +1417,7 @@ function animate() {
     activeEffect.draw();
   }
 
-  if (!wormActive && !fishPrizeActive) {
+  if (!wormActive && !fishPrizeActive && !runnerActive) {
     const elapsed = Date.now() - countdownStart;
     const remaining = Math.max(0, INTERVAL_MS - elapsed);
     const progress = 1 - remaining / INTERVAL_MS;
@@ -1160,6 +1430,7 @@ function animate() {
 
 window.addEventListener('resize', resize);
 document.addEventListener('click', handleClick);
+document.addEventListener('keydown', handleKeydown);
 resize();
 triggerRandomEffect();
 scheduleNextEffect();
