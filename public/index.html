@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Fishy's Pond</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -10,11 +10,13 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="game">
+  <canvas id="game" aria-label="Fishing pond"></canvas>
+
+  <div class="overlay">
     <header class="top-bar">
       <div class="title-block">
         <h1>Fishy's Pond</h1>
-        <p class="subtitle">cast, wait, reel — catch 'em all!</p>
+        <p class="subtitle">cast, wait, reel!</p>
       </div>
       <div class="stats">
         <div class="stat">
@@ -28,24 +30,21 @@
       </div>
     </header>
 
-    <div class="pond-wrap">
-      <canvas id="game" aria-label="Fishing pond"></canvas>
-      <div id="bite-alert" class="bite-alert hidden" aria-live="assertive">FISH ON!</div>
+    <div id="bite-alert" class="bite-alert hidden" aria-live="assertive">FISH ON!</div>
+
+    <div class="bottom-panel">
+      <div class="controls">
+        <button id="cast-btn" class="btn btn-cast" type="button">Cast Line</button>
+        <button id="reel-btn" class="btn btn-reel hidden" type="button">Reel In!</button>
+      </div>
+      <p id="message" class="message" aria-live="polite">Tap Cast Line to start fishing!</p>
+      <section class="bucket">
+        <h2>Your Bucket</h2>
+        <ul id="bucket-list" class="bucket-list">
+          <li class="empty">No fish yet!</li>
+        </ul>
+      </section>
     </div>
-
-    <div class="controls">
-      <button id="cast-btn" class="btn btn-cast" type="button">Cast Line</button>
-      <button id="reel-btn" class="btn btn-reel hidden" type="button">Reel In!</button>
-    </div>
-
-    <p id="message" class="message" aria-live="polite">Tap Cast Line to start fishing!</p>
-
-    <section class="bucket">
-      <h2>Your Bucket</h2>
-      <ul id="bucket-list" class="bucket-list">
-        <li class="empty">No fish yet — go catch some!</li>
-      </ul>
-    </section>
   </div>
 
   <script src="app.js"></script>
