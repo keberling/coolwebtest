@@ -35,11 +35,11 @@ const WHALE = FISH_TYPES.find((f) => f.kind === 'whale');
 
 let width = 0;
 let height = 0;
-let waterTop = 0;
-let dockY = 0;
-let anglerX = 0;
-let anglerFeetY = 0;
-let anglerScale = 1;
+let horizonY = 0;
+let nearWaterY = 0;
+let dockTopY = 0;
+let vanishX = 0;
+let handScale = 1;
 let fisherGender = 'boy';
 let castAnim = 0;
 let rodTip = { x: 0, y: 0 };
@@ -50,7 +50,9 @@ let score = 0;
 let caughtCount = 0;
 let bucket = [];
 
-let hook = { startX: 0, startY: 0, targetX: 0, targetY: 0, x: 0, y: 0, t: 0 };
+let hook = {
+  xNorm: 0.5, z: 0.6, targetXNorm: 0.5, targetZ: 0.6, x: 0, y: 0,
+};
 let bobberDip = 0;
 let swimFish = [];
 let lilyPads = [];
@@ -73,15 +75,39 @@ function resize() {
   canvas.style.height = `${height}px`;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  waterTop = height * 0.3;
-  dockY = waterTop - 4;
-  anglerX = width * 0.07;
-  anglerFeetY = dockY - 2;
-  anglerScale = Math.min(1.15, Math.max(0.75, height / 680));
+  horizonY = height * 0.26;
+  nearWaterY = height * 0.72;
+  dockTopY = height * 0.84;
+  vanishX = width * 0.5;
+  handScale = Math.min(1.2, Math.max(0.8, height / 680));
 
   if (gameState === STATE.IDLE) {
     initScene();
   }
+}
+
+function project(xNorm, z) {
+  const spread = 0.1 + z * 0.9;
+  const x = vanishX + (xNorm - 0.5) * width * spread;
+  const y = horizonY + (nearWaterY - horizonY) * z;
+  const scale = 0.18 + z * 0.82;
+  return { x, y, scale };
+}
+
+function waterSpread(z) {
+  return 0.1 + z * 0.9;
+}
+
+function waterLeftX(z) {
+  return vanishX - width * waterSpread(z) * 0.5;
+}
+
+function waterRightX(z) {
+  return vanishX + width * waterSpread(z) * 0.5;
+}
+
+function waterSurfaceY(z) {
+  return horizonY + (nearWaterY - horizonY) * z;
 }
 
 function rand(min, max) {
@@ -133,15 +159,16 @@ function updateBucket() {
 
 function initScene() {
   initSwimFish();
-  lilyPads = Array.from({ length: 6 }, () => ({
-    x: rand(width * 0.35, width * 0.95),
-    y: rand(waterTop + 30, height - 60),
-    r: rand(14, 26),
+  lilyPads = Array.from({ length: 8 }, () => ({
+    xNorm: rand(0.15, 0.85),
+    z: rand(0.35, 0.88),
+    r: rand(0.8, 1.4),
     phase: rand(0, Math.PI * 2),
   }));
-  reeds = Array.from({ length: 12 }, (_, i) => ({
-    x: rand(0, width * 0.28),
-    h: rand(40, 90),
+  reeds = Array.from({ length: 14 }, (_, i) => ({
+    side: i % 2 === 0 ? 'left' : 'right',
+    z: rand(0.45, 0.95),
+    h: rand(0.6, 1.2),
     phase: i * 0.5,
   }));
 }
@@ -152,11 +179,10 @@ function initSwimFish() {
     const isMega = type.kind === 'shark' || type.kind === 'whale';
     return {
       type,
-      x: rand(60, width - 60),
-      y: rand(waterTop + 60, height - 50),
-      speed: rand(isMega ? 0.2 : 0.35, isMega ? 0.55 : 1.1) * (Math.random() > 0.5 ? 1 : -1),
+      xNorm: rand(0.12, 0.88),
+      z: isMega ? rand(0.4, 0.7) : rand(0.3, 0.82),
+      speed: rand(isMega ? 0.0004 : 0.0008, isMega ? 0.001 : 0.002) * (Math.random() > 0.5 ? 1 : -1),
       wiggle: rand(0, Math.PI * 2),
-      depth: isMega ? rand(0.45, 0.65) : rand(0.5, 1),
     };
   });
 }
@@ -188,8 +214,10 @@ function castLine() {
   setButtons({ cast: false, reel: false });
   setMessage('Casting...');
 
-  hook.targetX = rand(width * 0.3, width * 0.88);
-  hook.targetY = rand(waterTop + 55, height - 55);
+  hook.targetXNorm = rand(0.22, 0.78);
+  hook.targetZ = rand(0.42, 0.82);
+  hook.xNorm = hook.targetXNorm;
+  hook.z = hook.targetZ;
   castAnim = 0;
   bobberDip = 0;
   ripples = [];
@@ -285,29 +313,29 @@ function getCastPose() {
 }
 
 function calcRodAngle(pose, t) {
-  const idle = -0.55;
+  const idle = -1.25;
   if (pose === 'idle' || pose === 'waiting') {
-    return idle + Math.sin(Date.now() * 0.0015) * 0.04;
+    return idle + Math.sin(Date.now() * 0.0015) * 0.05;
   }
   if (pose === 'excited') {
-    return -0.35 + Math.sin(Date.now() * 0.02) * 0.12;
+    return -0.95 + Math.sin(Date.now() * 0.02) * 0.1;
   }
   if (pose === 'happy') {
-    return -0.2 + Math.sin(Date.now() * 0.008) * 0.08;
+    return -0.85 + Math.sin(Date.now() * 0.008) * 0.07;
   }
   if (pose === 'reeling') {
-    return -0.4 + Math.sin(Date.now() * 0.015) * 0.15;
+    return -1.05 + Math.sin(Date.now() * 0.015) * 0.12;
   }
   if (pose === 'casting') {
     if (t < 0.3) {
       const p = t / 0.3;
-      return idle - p * 0.9;
+      return idle + p * 0.55;
     }
     if (t < 0.5) {
       const p = (t - 0.3) / 0.2;
-      return idle - 0.9 + p * 1.6;
+      return idle + 0.55 - p * 1.35;
     }
-    return idle + 0.7 - Math.min(1, (t - 0.5) / 0.5) * 0.35;
+    return idle - 0.8 + Math.min(1, (t - 0.5) / 0.5) * 0.45;
   }
   return idle;
 }
@@ -324,158 +352,143 @@ function calcBodyLean(pose, t) {
   return Math.sin(Date.now() * 0.0012) * 0.015;
 }
 
-function getHandWorld(lean, s) {
-  const lx = 18;
-  const ly = -42;
-  return {
-    x: anglerX + (Math.cos(lean) * lx - Math.sin(lean) * ly) * s,
-    y: anglerFeetY + (Math.sin(lean) * lx + Math.cos(lean) * ly) * s,
-  };
+function getGripCenter() {
+  return { x: width * 0.5, y: height * 0.87 };
 }
 
 function updateRodTip() {
   const { pose, t } = getCastPose();
-  const lean = calcBodyLean(pose, t);
   const rodAngle = calcRodAngle(pose, t);
-  const s = anglerScale;
-  const hand = getHandWorld(lean, s);
-  const rodLen = 78 * s;
-  rodTip.x = hand.x + Math.cos(rodAngle) * rodLen;
-  rodTip.y = hand.y + Math.sin(rodAngle) * rodLen;
+  const s = handScale;
+  const grip = getGripCenter();
+  const rodLen = 130 * s;
+  rodTip.x = grip.x + Math.cos(rodAngle) * rodLen * 0.25;
+  rodTip.y = grip.y + Math.sin(rodAngle) * rodLen;
 }
 
-function drawRod(handX, handY, rodAngle, s) {
-  const rodLen = 78 * s;
-  const tipX = handX + Math.cos(rodAngle) * rodLen;
-  const tipY = handY + Math.sin(rodAngle) * rodLen;
+function drawRodFP(gripX, gripY, rodAngle, s) {
+  const rodLen = 130 * s;
+  const tipX = gripX + Math.cos(rodAngle) * rodLen * 0.25;
+  const tipY = gripY + Math.sin(rodAngle) * rodLen;
 
   ctx.strokeStyle = '#5c3d2e';
-  ctx.lineWidth = 4 * s;
+  ctx.lineWidth = 5 * s;
   ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.moveTo(handX, handY);
+  ctx.moveTo(gripX, gripY);
   ctx.lineTo(tipX, tipY);
   ctx.stroke();
 
   ctx.strokeStyle = '#8b6914';
-  ctx.lineWidth = 2 * s;
+  ctx.lineWidth = 2.5 * s;
   ctx.beginPath();
-  ctx.moveTo(tipX - Math.cos(rodAngle) * 12 * s, tipY - Math.sin(rodAngle) * 12 * s);
+  ctx.moveTo(tipX - Math.cos(rodAngle) * 14 * s, tipY - Math.sin(rodAngle) * 14 * s);
   ctx.lineTo(tipX, tipY);
   ctx.stroke();
 
   ctx.fillStyle = '#c0c0c0';
   ctx.beginPath();
-  ctx.arc(tipX, tipY, 2.5 * s, 0, Math.PI * 2);
+  ctx.arc(tipX, tipY, 3 * s, 0, Math.PI * 2);
   ctx.fill();
 }
 
-function drawAngler() {
+function drawFirstPersonHands() {
   const { pose, t } = getCastPose();
-  const lean = calcBodyLean(pose, t);
   const rodAngle = calcRodAngle(pose, t);
-  const s = anglerScale;
+  const s = handScale;
   const isGirl = fisherGender === 'girl';
-  const x = anglerX;
-  const feetY = anglerFeetY;
   const shirt = isGirl ? '#f72585' : '#4361ee';
-  const shirtDark = isGirl ? '#b5179e' : '#3a0ca3';
-  const bottom = isGirl ? '#9d4edd' : '#2d6a4f';
+  const sleeve = isGirl ? '#b5179e' : '#3a0ca3';
   const skin = '#ffcba4';
   const skinShadow = '#e8a87c';
+  const grip = getGripCenter();
+  const leftX = width * 0.36;
+  const rightX = width * 0.64;
+  const armY = height * 0.94;
 
-  ctx.save();
-  ctx.translate(x, feetY);
-  ctx.scale(s, s);
-  ctx.rotate(lean);
-
-  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
   ctx.beginPath();
-  ctx.ellipse(10, 4, 22, 6, 0, 0, Math.PI * 2);
+  ctx.ellipse(width * 0.5, height - 8, width * 0.42, 18, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = bottom;
-  if (isGirl) {
+  const drawArm = (x1, y1, x2, y2, color) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 22 * s;
+    ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(-6, -18);
-    ctx.lineTo(26, -18);
-    ctx.lineTo(30, 2);
-    ctx.lineTo(-10, 2);
-    ctx.closePath();
-    ctx.fill();
-  } else {
-    ctx.fillRect(-4, -20, 14, 18);
-    ctx.fillRect(14, -20, 14, 18);
-  }
+    ctx.moveTo(x1, y1);
+    ctx.quadraticCurveTo(x1 + (x2 - x1) * 0.3, y1 - 30 * s, x2, y2);
+    ctx.stroke();
+  };
+
+  drawArm(leftX - 30, armY, grip.x - 14, grip.y + 4, sleeve);
+  drawArm(rightX + 30, armY, grip.x + 14, grip.y + 4, sleeve);
 
   ctx.fillStyle = shirt;
-  ctx.fillRect(-8, -48, 36, 32);
-  ctx.fillStyle = shirtDark;
-  ctx.fillRect(-8, -48, 8, 32);
-
-  ctx.fillStyle = skin;
   ctx.beginPath();
-  ctx.arc(10, -58, 16, 0, Math.PI * 2);
+  ctx.moveTo(width * 0.28, height);
+  ctx.lineTo(width * 0.72, height);
+  ctx.lineTo(width * 0.62, dockTopY + 10);
+  ctx.lineTo(width * 0.38, dockTopY + 10);
+  ctx.closePath();
   ctx.fill();
 
-  if (isGirl) {
-    ctx.fillStyle = '#6a040f';
-    ctx.beginPath();
-    ctx.arc(10, -64, 17, Math.PI, 0);
-    ctx.fill();
-    ctx.fillStyle = '#9d0208';
-    ctx.beginPath();
-    ctx.arc(-8, -56, 7, 0, Math.PI * 2);
-    ctx.arc(28, -56, 7, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ff006e';
-    ctx.beginPath();
-    ctx.arc(-8, -50, 5, 0, Math.PI * 2);
-    ctx.arc(28, -50, 5, 0, Math.PI * 2);
-    ctx.fill();
-  } else {
-    ctx.fillStyle = '#5c3d2e';
-    ctx.beginPath();
-    ctx.arc(10, -64, 16, Math.PI, 0);
-    ctx.fill();
-  }
+  drawRodFP(grip.x, grip.y, rodAngle, s);
 
-  ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.arc(4, -60, 4, 0, Math.PI * 2);
-  ctx.arc(16, -60, 4, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#1a3a4a';
-  ctx.beginPath();
-  ctx.arc(5, -60, 2, 0, Math.PI * 2);
-  ctx.arc(17, -60, 2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.arc(6, -61, 0.9, 0, Math.PI * 2);
-  ctx.arc(18, -61, 0.9, 0, Math.PI * 2);
-  ctx.fill();
+  const drawHand = (hx, hy, flip) => {
+    ctx.save();
+    ctx.translate(hx, hy);
+    if (flip) ctx.scale(-1, 1);
+    ctx.fillStyle = skinShadow;
+    ctx.beginPath();
+    ctx.ellipse(0, 4, 12 * s, 10 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = skin;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 11 * s, 9 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  };
+
+  drawHand(grip.x - 14, grip.y + 2, false);
+  drawHand(grip.x + 14, grip.y + 2, true);
 
   if (pose === 'happy' || pose === 'excited') {
-    ctx.strokeStyle = '#1a3a4a';
-    ctx.lineWidth = 2;
+    ctx.font = `${Math.floor(18 * s)}px Fredoka, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#1a3a4a';
+    ctx.fillText(pose === 'happy' ? ':D' : '!', width * 0.5, dockTopY - 6);
+  }
+
+  updateRodTip();
+}
+
+function drawForegroundDock() {
+  const grad = ctx.createLinearGradient(0, dockTopY, 0, height);
+  grad.addColorStop(0, '#c4956a');
+  grad.addColorStop(0.4, '#a67c52');
+  grad.addColorStop(1, '#7a5535');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(0, height);
+  ctx.lineTo(width, height);
+  ctx.lineTo(width, dockTopY + 6);
+  ctx.lineTo(0, dockTopY + 14);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(70, 40, 20, 0.35)';
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 10; i++) {
+    const px = (i / 10) * width;
     ctx.beginPath();
-    ctx.arc(10, -52, 6, 0.15, Math.PI - 0.15);
+    ctx.moveTo(px, dockTopY + 10 + i * 0.4);
+    ctx.lineTo(px + 8, height);
     ctx.stroke();
   }
 
-  ctx.fillStyle = skinShadow;
-  ctx.fillRect(14, -46, 10, 14);
-  ctx.fillStyle = skin;
-  ctx.beginPath();
-  ctx.arc(19, -38, 6, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.restore();
-
-  const hand = getHandWorld(lean, s);
-  drawRod(hand.x, hand.y, rodAngle, s);
-  updateRodTip();
+  ctx.fillStyle = 'rgba(0,0,0,0.08)';
+  ctx.fillRect(0, dockTopY, width, 4);
 }
 
 function toggleFisher() {
@@ -485,153 +498,142 @@ function toggleFisher() {
 }
 
 function drawSky() {
-  const grad = ctx.createLinearGradient(0, 0, 0, waterTop);
+  const grad = ctx.createLinearGradient(0, 0, 0, horizonY);
   grad.addColorStop(0, '#7ec8f2');
   grad.addColorStop(0.45, '#5ba8d4');
-  grad.addColorStop(1, '#3d8eb8');
+  grad.addColorStop(1, '#4a9ec8');
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, width, waterTop);
+  ctx.fillRect(0, 0, width, horizonY);
 
-  const sunX = width * 0.78;
-  const sunY = height * 0.09;
-  const sunGlow = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, 100);
+  const sunX = width * 0.72;
+  const sunY = height * 0.1;
+  const sunGlow = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, 110);
   sunGlow.addColorStop(0, 'rgba(255, 249, 196, 0.9)');
   sunGlow.addColorStop(0.4, 'rgba(255, 214, 10, 0.35)');
   sunGlow.addColorStop(1, 'transparent');
   ctx.fillStyle = sunGlow;
-  ctx.fillRect(sunX - 100, sunY - 100, 200, 200);
+  ctx.fillRect(sunX - 110, sunY - 110, 220, 220);
 
   ctx.fillStyle = '#ffe066';
   ctx.beginPath();
-  ctx.arc(sunX, sunY, 38, 0, Math.PI * 2);
+  ctx.arc(sunX, sunY, 36, 0, Math.PI * 2);
   ctx.fill();
 
-  const hills = ctx.createLinearGradient(0, waterTop - 80, 0, waterTop);
+  const hills = ctx.createLinearGradient(0, horizonY - 60, 0, horizonY);
   hills.addColorStop(0, '#3d6b4f');
   hills.addColorStop(1, '#2d5a3f');
   ctx.fillStyle = hills;
   ctx.beginPath();
-  ctx.moveTo(0, waterTop);
-  for (let x = 0; x <= width; x += 40) {
-    const h = Math.sin(x * 0.008) * 25 + Math.sin(x * 0.02) * 12;
-    ctx.lineTo(x, waterTop - 50 - h);
+  ctx.moveTo(waterLeftX(0), horizonY);
+  for (let i = 0; i <= 20; i++) {
+    const xNorm = i / 20;
+    const x = project(xNorm, 0).x;
+    const h = Math.sin(xNorm * 12) * 18 + Math.sin(xNorm * 28) * 8;
+    ctx.lineTo(x, horizonY - 28 - h);
   }
-  ctx.lineTo(width, waterTop);
+  ctx.lineTo(waterRightX(0), horizonY);
   ctx.closePath();
   ctx.fill();
 
   ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
-  [[0.12, 0.1, 1], [0.32, 0.07, 0.85], [0.52, 0.12, 0.9], [0.68, 0.06, 0.75]].forEach(([px, py, s]) => {
+  [[0.15, 0.08, 1], [0.38, 0.05, 0.85], [0.58, 0.1, 0.9], [0.78, 0.06, 0.75]].forEach(([px, py, s]) => {
     const cx = width * px;
     const cy = height * py;
     ctx.beginPath();
-    ctx.arc(cx, cy, 22 * s, 0, Math.PI * 2);
-    ctx.arc(cx + 28 * s, cy - 10 * s, 18 * s, 0, Math.PI * 2);
-    ctx.arc(cx + 52 * s, cy + 2 * s, 20 * s, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 20 * s, 0, Math.PI * 2);
+    ctx.arc(cx + 26 * s, cy - 9 * s, 16 * s, 0, Math.PI * 2);
+    ctx.arc(cx + 48 * s, cy + 2 * s, 18 * s, 0, Math.PI * 2);
     ctx.fill();
   });
 }
 
-function drawDock() {
-  const dockW = width * 0.28;
-
-  ctx.fillStyle = 'rgba(0,0,0,0.15)';
-  ctx.fillRect(4, dockY + 6, dockW, 18);
-
-  const plankGrad = ctx.createLinearGradient(0, dockY, 0, dockY + 18);
-  plankGrad.addColorStop(0, '#d4a574');
-  plankGrad.addColorStop(1, '#a67c52');
-  ctx.fillStyle = plankGrad;
-  ctx.fillRect(0, dockY, dockW, 18);
-
-  ctx.strokeStyle = 'rgba(90, 55, 30, 0.4)';
-  ctx.lineWidth = 1;
-  for (let x = 0; x < dockW; x += 22) {
-    ctx.beginPath();
-    ctx.moveTo(x, dockY);
-    ctx.lineTo(x, dockY + 18);
-    ctx.stroke();
-  }
-
-  ctx.fillStyle = '#6b4423';
-  for (let x = 8; x < dockW; x += 28) {
-    ctx.fillRect(x, dockY + 18, 9, height - dockY - 18);
-    ctx.fillStyle = '#5a3818';
-    ctx.fillRect(x + 1, dockY + 18, 2, height - dockY - 18);
-    ctx.fillStyle = '#6b4423';
-  }
-
-  const tx = width * 0.1;
-  ctx.fillStyle = '#5a3818';
-  ctx.fillRect(tx, dockY - 70, 12, 72);
-  ctx.fillStyle = '#3d8b5a';
-  ctx.beginPath();
-  ctx.arc(tx + 6, dockY - 78, 32, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#2d6b45';
-  ctx.beginPath();
-  ctx.arc(tx - 10, dockY - 62, 22, 0, Math.PI * 2);
-  ctx.arc(tx + 22, dockY - 58, 20, 0, Math.PI * 2);
-  ctx.fill();
-
-}
-
 function drawWater() {
   const t = Date.now() * 0.001;
+  const topL = waterLeftX(0);
+  const topR = waterRightX(0);
+  const botL = waterLeftX(1);
+  const botR = waterRightX(1);
 
-  const surfaceGrad = ctx.createLinearGradient(0, waterTop, 0, height);
+  const surfaceGrad = ctx.createLinearGradient(0, horizonY, 0, nearWaterY);
   surfaceGrad.addColorStop(0, '#3eb5e8');
-  surfaceGrad.addColorStop(0.25, '#2196c4');
-  surfaceGrad.addColorStop(0.6, '#1565a8');
-  surfaceGrad.addColorStop(1, '#0a3d62');
+  surfaceGrad.addColorStop(0.35, '#2196c4');
+  surfaceGrad.addColorStop(0.7, '#1565a8');
+  surfaceGrad.addColorStop(1, '#0d4f82');
   ctx.fillStyle = surfaceGrad;
-  ctx.fillRect(0, waterTop, width, height - waterTop);
+  ctx.beginPath();
+  ctx.moveTo(topL, horizonY);
+  ctx.lineTo(topR, horizonY);
+  ctx.lineTo(botR, nearWaterY);
+  ctx.lineTo(botL, nearWaterY);
+  ctx.closePath();
+  ctx.fill();
 
-  ctx.globalAlpha = 0.08;
-  for (let i = 0; i < 5; i++) {
+  ctx.globalAlpha = 0.07;
+  for (let i = 0; i < 6; i++) {
+    const z = 0.2 + i * 0.12;
+    const p = project(0.5, z);
     ctx.fillStyle = '#fff';
     ctx.beginPath();
-    const cx = ((t * 30 + i * 200) % (width + 100)) - 50;
-    const cy = waterTop + 80 + i * (height - waterTop) / 6;
-    ctx.ellipse(cx, cy, 80, 20, 0, 0, Math.PI * 2);
+    const cx = ((t * 25 + i * 180) % (width + 80)) - 40;
+    ctx.ellipse(cx, p.y, 70 * p.scale, 14 * p.scale, 0, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.globalAlpha = 1;
 
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  for (let x = 0; x <= width; x += 5) {
-    const y = waterTop + Math.sin(x * 0.018 + t * 1.5) * 3 + Math.sin(x * 0.04 + t) * 1.5;
-    if (x === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.stroke();
-
-  reeds.forEach((reed) => {
-    const sway = Math.sin(t * 1.2 + reed.phase) * 6;
-    ctx.strokeStyle = '#3d7a48';
-    ctx.lineWidth = 3;
+  for (let zi = 1; zi <= 6; zi++) {
+    const z = zi / 6;
+    const left = waterLeftX(z);
+    const right = waterRightX(z);
+    const baseY = waterSurfaceY(z);
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.12 + z * 0.2})`;
+    ctx.lineWidth = 1 + z * 1.5;
     ctx.beginPath();
-    ctx.moveTo(reed.x, height);
-    ctx.quadraticCurveTo(reed.x + sway, height - reed.h * 0.5, reed.x + sway * 1.5, height - reed.h);
+    const steps = 12;
+    for (let s = 0; s <= steps; s++) {
+      const x = left + (right - left) * (s / steps);
+      const wave = Math.sin(s * 0.9 + t * 1.4 + zi) * (2 + z * 2);
+      if (s === 0) ctx.moveTo(x, baseY + wave);
+      else ctx.lineTo(x, baseY + wave);
+    }
+    ctx.stroke();
+  }
+}
+
+function drawReeds() {
+  const t = Date.now() * 0.001;
+  const sorted = [...reeds].sort((a, b) => b.z - a.z);
+  sorted.forEach((reed) => {
+    const sway = Math.sin(t * 1.2 + reed.phase) * (4 + reed.z * 6);
+    const xNorm = reed.side === 'left' ? 0.04 : 0.96;
+    const base = project(xNorm, reed.z);
+    const h = reed.h * (40 + reed.z * 50);
+    const tipX = base.x + sway;
+    const tipY = base.y - h;
+    ctx.strokeStyle = '#3d7a48';
+    ctx.lineWidth = 2 + reed.z * 3;
+    ctx.beginPath();
+    ctx.moveTo(base.x, base.y);
+    ctx.quadraticCurveTo(base.x + sway * 0.6, base.y - h * 0.5, tipX, tipY);
     ctx.stroke();
   });
 }
 
 function drawLilyPads() {
   const t = Date.now() * 0.001;
-  lilyPads.forEach((pad) => {
-    const bob = Math.sin(t + pad.phase) * 2;
+  const sorted = [...lilyPads].sort((a, b) => a.z - b.z);
+  sorted.forEach((pad) => {
+    const p = project(pad.xNorm, pad.z);
+    const bob = Math.sin(t + pad.phase) * (1 + pad.z * 2);
+    const r = pad.r * (8 + p.scale * 14);
     ctx.fillStyle = '#40916c';
     ctx.beginPath();
-    ctx.ellipse(pad.x, pad.y + bob, pad.r, pad.r * 0.7, 0, 0, Math.PI * 2);
+    ctx.ellipse(p.x, p.y + bob, r, r * 0.65, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = '#2d6a4f';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(pad.x, pad.y + bob);
-    ctx.lineTo(pad.x + pad.r * 0.6, pad.y + bob);
+    ctx.moveTo(p.x, p.y + bob);
+    ctx.lineTo(p.x + r * 0.55, p.y + bob);
     ctx.stroke();
   });
 }
@@ -852,14 +854,18 @@ function creatureCelebrateScale(type) {
 
 function drawSwimmingFish() {
   swimFish.forEach((fish) => {
-    fish.x += fish.speed;
+    fish.xNorm += fish.speed;
     fish.wiggle += 0.07;
-    const margin = fish.type.kind === 'whale' ? 100 : fish.type.kind === 'shark' ? 70 : 40;
-    if (fish.x < margin) { fish.x = margin; fish.speed *= -1; }
-    if (fish.x > width - margin) { fish.x = width - margin; fish.speed *= -1; }
+    const margin = fish.type.kind === 'whale' ? 0.08 : fish.type.kind === 'shark' ? 0.06 : 0.04;
+    if (fish.xNorm < margin) { fish.xNorm = margin; fish.speed *= -1; }
+    if (fish.xNorm > 1 - margin) { fish.xNorm = 1 - margin; fish.speed *= -1; }
+  });
 
-    const wobble = Math.sin(fish.wiggle) * 3;
-    drawFish(fish, fish.x, fish.y + wobble, fish.speed > 0 ? 1 : -1, 1, false, fish.depth);
+  const sorted = [...swimFish].sort((a, b) => a.z - b.z);
+  sorted.forEach((fish) => {
+    const p = project(fish.xNorm, fish.z);
+    const wobble = Math.sin(fish.wiggle) * (2 + fish.z * 3);
+    drawFish(fish, p.x, p.y + wobble, fish.speed > 0 ? 1 : -1, p.scale, false, fish.z);
   });
 }
 
@@ -915,8 +921,13 @@ function drawFishingLine(x1, y1, x2, y2) {
   ctx.stroke();
 }
 
+function hookTargetPos() {
+  return project(hook.targetXNorm, hook.targetZ);
+}
+
 function updateHookPosition() {
   updateRodTip();
+  const target = hookTargetPos();
 
   if (gameState === STATE.CASTING) {
     castAnim = Math.min(1, castAnim + 0.022);
@@ -930,20 +941,22 @@ function updateHookPosition() {
         castRelease.y = rodTip.y;
       }
       const flyT = (castAnim - 0.5) / 0.32;
-      hook.x = castRelease.x + (hook.targetX - castRelease.x) * flyT;
-      const drop = castRelease.y + (hook.targetY - castRelease.y) * flyT;
-      const loft = Math.sin(flyT * Math.PI) * -70 * (1 - flyT * 0.5);
+      hook.x = castRelease.x + (target.x - castRelease.x) * flyT;
+      const drop = castRelease.y + (target.y - castRelease.y) * flyT;
+      const loft = Math.sin(flyT * Math.PI) * -80 * (1 - flyT * 0.5);
       hook.y = drop + loft;
     } else {
       const splashT = (castAnim - 0.82) / 0.18;
-      hook.x = hook.targetX;
-      hook.y = hook.targetY + splashT * 18;
+      hook.x = target.x;
+      hook.y = target.y + splashT * 16;
       if (castAnim >= 1 && ripples.length < 3) {
-        ripples.push({ x: hook.targetX, y: waterTop + 6, r: 0, life: 1 });
-        ripples.push({ x: hook.targetX, y: waterTop + 6, r: 0, life: 0.7 });
+        ripples.push({ x: target.x, y: target.y, r: 0, life: 1, z: hook.targetZ });
+        ripples.push({ x: target.x, y: target.y, r: 0, life: 0.7, z: hook.targetZ });
       }
       if (castAnim >= 1) {
-        hook.y = hook.targetY;
+        hook.xNorm = hook.targetXNorm;
+        hook.z = hook.targetZ;
+        hook.y = target.y;
         startWaiting();
       }
     }
@@ -952,23 +965,26 @@ function updateHookPosition() {
 
   if (gameState === STATE.WAITING) {
     bobberDip = calcBobberDip(5, 0.003);
-    hook.y = hook.targetY + bobberDip;
-    hook.x = hook.targetX;
+    const p = project(hook.xNorm, hook.z);
+    hook.x = p.x;
+    hook.y = p.y + bobberDip;
     return;
   }
 
   if (gameState === STATE.BITING) {
     bobberDip = calcBobberDip(16, 0.018) + calcBobberDip(6, 0.04);
-    hook.y = hook.targetY + bobberDip;
-    hook.x = hook.targetX;
+    const p = project(hook.xNorm, hook.z);
+    hook.x = p.x;
+    hook.y = p.y + bobberDip;
     return;
   }
 
   if (gameState === STATE.REELING) {
     reelT = Math.min(1, reelT + 0.05);
     const ease = 1 - Math.pow(1 - reelT, 2);
-    hook.x = hook.targetX + (rodTip.x - hook.targetX) * ease;
-    hook.y = hook.targetY + (rodTip.y - hook.targetY) * ease;
+    const p = project(hook.xNorm, hook.z);
+    hook.x = p.x + (rodTip.x - p.x) * ease;
+    hook.y = p.y + (rodTip.y - p.y) * ease;
     bobberDip = 0;
     return;
   }
@@ -987,9 +1003,14 @@ function drawLineAndHook() {
 
   drawFishingLine(rodTip.x, rodTip.y, hook.x, hook.y - 6);
 
-  const showBobber = hook.y > waterTop - 10 && gameState !== STATE.REELING;
+  const showBobber = hook.y < dockTopY && gameState !== STATE.REELING;
   if (showBobber) {
-    drawBobber(hook.x, hook.y, gameState === STATE.BITING);
+    const bobScale = hook.z ? project(hook.xNorm, hook.z).scale : 0.8;
+    ctx.save();
+    ctx.translate(hook.x, hook.y);
+    ctx.scale(bobScale, bobScale);
+    drawBobber(0, 0, gameState === STATE.BITING);
+    ctx.restore();
   }
 
   if (gameState === STATE.CASTING && castAnim > 0.5 && castAnim < 0.85) {
@@ -1001,9 +1022,10 @@ function drawLineAndHook() {
 
   if (gameState === STATE.BITING && bitingFish) {
     const mega = bitingFish.kind === 'shark' || bitingFish.kind === 'whale';
-    const fx = hook.x + (mega ? 70 : 40);
-    const fy = hook.y + (mega ? 30 : 18) + calcBobberDip(8, 0.02);
-    drawCreature({ type: bitingFish }, fx, fy, -1, creatureBiteScale(bitingFish), true, 1);
+    const biteScale = project(hook.xNorm, hook.z).scale;
+    const fx = hook.x + (mega ? 55 : 32) * biteScale;
+    const fy = hook.y + (mega ? 22 : 12) * biteScale + calcBobberDip(8, 0.02);
+    drawCreature({ type: bitingFish }, fx, fy, -1, creatureBiteScale(bitingFish) * biteScale, true, 1);
   }
 }
 
@@ -1024,25 +1046,26 @@ function drawCelebration() {
   if (!caughtFish || celebrateTimer <= 0) return;
 
   const cx = width * 0.5;
-  const cy = height * 0.42;
-  const bounce = Math.abs(Math.sin(Date.now() * 0.006)) * 12;
+  const cy = height * 0.48;
+  const bounce = Math.abs(Math.sin(Date.now() * 0.006)) * 14;
   const mega = caughtFish.kind === 'shark' || caughtFish.kind === 'whale';
-  drawCreature({ type: caughtFish }, cx, cy - bounce, 1, creatureCelebrateScale(caughtFish), true, 1);
+  const heldScale = creatureCelebrateScale(caughtFish) * 1.3;
+  drawCreature({ type: caughtFish }, cx, cy - bounce, 1, heldScale, true, 1);
 
   ctx.fillStyle = mega ? '#48cae4' : '#fee440';
-  ctx.font = `bold ${Math.floor(width * 0.04)}px Fredoka, sans-serif`;
+  ctx.font = `bold ${Math.floor(width * 0.045)}px Fredoka, sans-serif`;
   ctx.textAlign = 'center';
   ctx.shadowColor = 'rgba(0,0,0,0.3)';
   ctx.shadowBlur = 8;
-  ctx.fillText(mega ? 'MEGA CATCH!' : 'CAUGHT!', cx, cy - (mega ? 120 : 90));
+  ctx.fillText(mega ? 'MEGA CATCH!' : 'CAUGHT!', cx, cy - (mega ? 130 : 100));
   ctx.shadowBlur = 0;
 
   for (let i = 0; i < 10; i++) {
     const angle = (Date.now() * 0.002 + i) * Math.PI * 2 / 10;
-    const dist = 70 + Math.sin(Date.now() * 0.004 + i) * 20;
+    const dist = 80 + Math.sin(Date.now() * 0.004 + i) * 22;
     ctx.fillStyle = ['#ff6b35', '#06d6a0', '#fee440', '#4cc9f0'][i % 4];
     ctx.beginPath();
-    ctx.arc(cx + Math.cos(angle) * dist, cy + Math.sin(angle) * dist, 7, 0, Math.PI * 2);
+    ctx.arc(cx + Math.cos(angle) * dist, cy - 20 + Math.sin(angle) * dist * 0.6, 7, 0, Math.PI * 2);
     ctx.fill();
   }
 }
@@ -1054,13 +1077,14 @@ function update() {
 function draw() {
   drawSky();
   drawWater();
+  drawReeds();
   drawLilyPads();
-  drawDock();
   drawSwimmingFish();
-  drawAngler();
   drawRipples();
-  drawLineAndHook();
   drawCelebration();
+  drawLineAndHook();
+  drawForegroundDock();
+  drawFirstPersonHands();
 }
 
 function loop() {
