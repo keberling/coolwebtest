@@ -19,13 +19,19 @@ const STATE = {
 };
 
 const FISH_TYPES = [
-  { name: 'Goldie', color: '#ffb703', belly: '#ffe8a3', fin: '#fb8500', points: 10, size: 0.7, rare: false },
-  { name: 'Bubbles', color: '#4cc9f0', belly: '#caf0f8', fin: '#0077b6', points: 15, size: 0.75, rare: false },
-  { name: 'Stripey', color: '#90be6d', belly: '#d4e7ba', fin: '#588157', points: 20, size: 0.85, rare: false },
-  { name: 'Sunset', color: '#f94144', belly: '#ffc9c9', fin: '#c1121f', points: 30, size: 0.9, rare: false },
-  { name: 'King Fin', color: '#7b2cbf', belly: '#e0aaff', fin: '#5a189a', points: 50, size: 1.2, rare: true },
-  { name: 'Rainbow Ray', color: '#ff006e', belly: '#ffafcc', fin: '#c9184a', points: 40, size: 1.0, rare: true },
+  { name: 'Goldie', kind: 'fish', color: '#ffb703', belly: '#ffe8a3', fin: '#fb8500', points: 10, size: 0.7, rare: false },
+  { name: 'Bubbles', kind: 'fish', color: '#4cc9f0', belly: '#caf0f8', fin: '#0077b6', points: 15, size: 0.75, rare: false },
+  { name: 'Stripey', kind: 'fish', color: '#90be6d', belly: '#d4e7ba', fin: '#588157', points: 20, size: 0.85, rare: false },
+  { name: 'Sunset', kind: 'fish', color: '#f94144', belly: '#ffc9c9', fin: '#c1121f', points: 30, size: 0.9, rare: false },
+  { name: 'King Fin', kind: 'fish', color: '#7b2cbf', belly: '#e0aaff', fin: '#5a189a', points: 50, size: 1.2, rare: true },
+  { name: 'Rainbow Ray', kind: 'fish', color: '#ff006e', belly: '#ffafcc', fin: '#c9184a', points: 40, size: 1.0, rare: true },
+  { name: 'Sharp Tooth', kind: 'shark', color: '#5c6770', belly: '#ced4da', fin: '#343a40', points: 120, size: 2.0, rare: true, mega: true },
+  { name: 'Splashy', kind: 'whale', color: '#023e8a', belly: '#90e0ef', fin: '#0077b6', points: 200, size: 2.8, rare: true, mega: true },
 ];
+
+const COMMON_FISH = FISH_TYPES.filter((f) => !f.rare && f.kind === 'fish');
+const SHARK = FISH_TYPES.find((f) => f.kind === 'shark');
+const WHALE = FISH_TYPES.find((f) => f.kind === 'whale');
 
 let width = 0;
 let height = 0;
@@ -84,9 +90,19 @@ function rand(min, max) {
 
 function pickFishType() {
   const roll = Math.random();
-  if (roll < 0.12) return FISH_TYPES[4];
+  if (roll < 0.03) return WHALE;
+  if (roll < 0.08) return SHARK;
+  if (roll < 0.14) return FISH_TYPES[4];
   if (roll < 0.22) return FISH_TYPES[5];
-  return FISH_TYPES[Math.floor(Math.random() * 4)];
+  return COMMON_FISH[Math.floor(Math.random() * COMMON_FISH.length)];
+}
+
+function pickSwimFishType() {
+  const roll = Math.random();
+  if (roll < 0.04) return WHALE;
+  if (roll < 0.1) return SHARK;
+  if (roll < 0.18) return FISH_TYPES[4 + Math.floor(Math.random() * 2)];
+  return COMMON_FISH[Math.floor(Math.random() * COMMON_FISH.length)];
 }
 
 function setMessage(text) {
@@ -109,7 +125,7 @@ function updateBucket() {
   }
   bucket.slice(0, 12).forEach((fish) => {
     const li = document.createElement('li');
-    li.className = fish.rare ? 'rare' : '';
+    li.className = fish.mega ? 'mega' : fish.rare ? 'rare' : '';
     li.textContent = `${fish.name} (+${fish.points})`;
     bucketList.appendChild(li);
   });
@@ -132,14 +148,15 @@ function initScene() {
 
 function initSwimFish() {
   swimFish = Array.from({ length: 9 }, () => {
-    const type = pickFishType();
+    const type = pickSwimFishType();
+    const isMega = type.kind === 'shark' || type.kind === 'whale';
     return {
       type,
       x: rand(60, width - 60),
       y: rand(waterTop + 60, height - 50),
-      speed: rand(0.35, 1.1) * (Math.random() > 0.5 ? 1 : -1),
+      speed: rand(isMega ? 0.2 : 0.35, isMega ? 0.55 : 1.1) * (Math.random() > 0.5 ? 1 : -1),
       wiggle: rand(0, Math.PI * 2),
-      depth: rand(0.5, 1),
+      depth: isMega ? rand(0.45, 0.65) : rand(0.5, 1),
     };
   });
 }
@@ -233,7 +250,7 @@ function celebrateCatch() {
   const fish = caughtFish;
   caughtCount += 1;
   score += fish.points;
-  bucket.unshift({ name: fish.name, points: fish.points, rare: fish.rare });
+  bucket.unshift({ name: fish.name, points: fish.points, rare: fish.rare, mega: fish.mega, kind: fish.kind });
   updateUI();
   updateBucket();
 
@@ -241,8 +258,11 @@ function celebrateCatch() {
     `Awesome! You caught ${fish.name}!`,
     `Wow! ${fish.name} is a keeper!`,
     `Nice one! ${fish.name} (+${fish.points})`,
-    fish.rare ? `WHOA! Rare fish — ${fish.name}!` : `Great job catching ${fish.name}!`,
-  ];
+    fish.kind === 'whale' ? `INCREDIBLE! You caught a WHALE — ${fish.name}!` : null,
+    fish.kind === 'shark' ? `AMAZING! A real SHARK — ${fish.name}!` : null,
+    fish.rare && !fish.mega ? `WHOA! Rare fish — ${fish.name}!` : null,
+    `Great job catching ${fish.name}!`,
+  ].filter(Boolean);
   setMessage(cheers[Math.floor(Math.random() * cheers.length)]);
   celebrateTimer = 120;
 
@@ -616,31 +636,23 @@ function drawLilyPads() {
   });
 }
 
-function drawFish(fish, x, y, facing, scale, happy, depth) {
-  const s = scale * fish.type.size * (depth || 1);
-  const alpha = 0.55 + (depth || 1) * 0.4;
-
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(facing, 1);
-  ctx.globalAlpha = alpha;
-
+function drawRegularFish(type, s, alpha, happy) {
   ctx.fillStyle = 'rgba(0, 30, 50, 0.2)';
   ctx.beginPath();
   ctx.ellipse(2, 6, 20 * s, 8 * s, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = fish.type.color;
+  ctx.fillStyle = type.color;
   ctx.beginPath();
   ctx.ellipse(0, 0, 24 * s, 15 * s, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = fish.type.belly;
+  ctx.fillStyle = type.belly;
   ctx.beginPath();
   ctx.ellipse(3 * s, 5 * s, 15 * s, 9 * s, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = fish.type.fin;
+  ctx.fillStyle = type.fin;
   ctx.beginPath();
   ctx.moveTo(-22 * s, 0);
   ctx.lineTo(-36 * s, -14 * s);
@@ -664,10 +676,6 @@ function drawFish(fish, x, y, facing, scale, happy, depth) {
   ctx.beginPath();
   ctx.arc(14 * s, -5 * s, 3 * s, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.arc(15 * s, -6 * s, 1.2 * s, 0, Math.PI * 2);
-  ctx.fill();
 
   if (happy) {
     ctx.strokeStyle = '#1a3a4a';
@@ -682,16 +690,173 @@ function drawFish(fish, x, y, facing, scale, happy, depth) {
   ctx.beginPath();
   ctx.ellipse(0, 0, 24 * s, 15 * s, 0, 0, Math.PI * 2);
   ctx.stroke();
+}
+
+function drawShark(type, s, alpha, happy) {
+  ctx.fillStyle = 'rgba(0, 20, 40, 0.25)';
+  ctx.beginPath();
+  ctx.ellipse(4, 14, 50 * s, 14 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = type.color;
+  ctx.beginPath();
+  ctx.moveTo(-55 * s, 0);
+  ctx.quadraticCurveTo(-20 * s, -22 * s, 30 * s, -10 * s);
+  ctx.quadraticCurveTo(55 * s, 0, 30 * s, 12 * s);
+  ctx.quadraticCurveTo(-20 * s, 20 * s, -55 * s, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = type.belly;
+  ctx.beginPath();
+  ctx.ellipse(5 * s, 8 * s, 28 * s, 10 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = type.fin;
+  ctx.beginPath();
+  ctx.moveTo(-5 * s, -12 * s);
+  ctx.lineTo(8 * s, -32 * s);
+  ctx.lineTo(18 * s, -10 * s);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(-40 * s, 2 * s);
+  ctx.lineTo(-62 * s, -18 * s);
+  ctx.lineTo(-58 * s, 6 * s);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(28 * s, -6 * s, 5 * s, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#212529';
+  ctx.beginPath();
+  ctx.arc(30 * s, -6 * s, 2.2 * s, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (happy) {
+    ctx.fillStyle = '#fff';
+    for (let i = 0; i < 5; i++) {
+      const tx = (10 + i * 7) * s;
+      ctx.beginPath();
+      ctx.moveTo(tx, 6 * s);
+      ctx.lineTo(tx + 3 * s, 12 * s);
+      ctx.lineTo(tx + 6 * s, 6 * s);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+}
+
+function drawWhale(type, s, alpha, happy) {
+  ctx.fillStyle = 'rgba(0, 20, 40, 0.2)';
+  ctx.beginPath();
+  ctx.ellipse(0, 18, 70 * s, 16 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = type.color;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 55 * s, 28 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = type.belly;
+  ctx.beginPath();
+  ctx.ellipse(8 * s, 12 * s, 38 * s, 16 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = type.fin;
+  ctx.beginPath();
+  ctx.moveTo(-50 * s, -4 * s);
+  ctx.lineTo(-78 * s, -30 * s);
+  ctx.lineTo(-72 * s, 8 * s);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(10 * s, -24 * s);
+  ctx.lineTo(22 * s, -40 * s);
+  ctx.lineTo(28 * s, -20 * s);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = type.color;
+  ctx.beginPath();
+  ctx.ellipse(38 * s, -8 * s, 8 * s, 5 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(30 * s, -10 * s, 5 * s, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#1a3a4a';
+  ctx.beginPath();
+  ctx.arc(31 * s, -10 * s, 2.5 * s, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (happy) {
+    ctx.strokeStyle = '#1a3a4a';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(36 * s, 2 * s, 8 * s, 0.2, Math.PI - 0.2);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(20 * s, -32 * s);
+    ctx.quadraticCurveTo(24 * s, -55 * s, 30 * s, -70 * s);
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 55 * s, 28 * s, 0, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+function drawCreature(fish, x, y, facing, scale, happy, depth) {
+  const type = fish.type || fish;
+  const s = scale * type.size * (depth || 1);
+  const alpha = 0.55 + (depth || 1) * 0.4;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(facing, 1);
+  ctx.globalAlpha = alpha;
+
+  if (type.kind === 'shark') drawShark(type, s, alpha, happy);
+  else if (type.kind === 'whale') drawWhale(type, s, alpha, happy);
+  else drawRegularFish(type, s, alpha, happy);
 
   ctx.restore();
+}
+
+function drawFish(fish, x, y, facing, scale, happy, depth) {
+  drawCreature(fish, x, y, facing, scale, happy, depth);
+}
+
+function creatureBiteScale(type) {
+  if (type.kind === 'whale') return 0.75;
+  if (type.kind === 'shark') return 0.9;
+  return 1.15;
+}
+
+function creatureCelebrateScale(type) {
+  if (type.kind === 'whale') return 1.1;
+  if (type.kind === 'shark') return 1.0;
+  return 1.8;
 }
 
 function drawSwimmingFish() {
   swimFish.forEach((fish) => {
     fish.x += fish.speed;
     fish.wiggle += 0.07;
-    if (fish.x < 40) { fish.x = 40; fish.speed *= -1; }
-    if (fish.x > width - 40) { fish.x = width - 40; fish.speed *= -1; }
+    const margin = fish.type.kind === 'whale' ? 100 : fish.type.kind === 'shark' ? 70 : 40;
+    if (fish.x < margin) { fish.x = margin; fish.speed *= -1; }
+    if (fish.x > width - margin) { fish.x = width - margin; fish.speed *= -1; }
 
     const wobble = Math.sin(fish.wiggle) * 3;
     drawFish(fish, fish.x, fish.y + wobble, fish.speed > 0 ? 1 : -1, 1, false, fish.depth);
@@ -835,9 +1000,10 @@ function drawLineAndHook() {
   }
 
   if (gameState === STATE.BITING && bitingFish) {
-    const fx = hook.x + 40;
-    const fy = hook.y + 18 + calcBobberDip(8, 0.02);
-    drawFish({ type: bitingFish }, fx, fy, -1, 1.15, true, 1);
+    const mega = bitingFish.kind === 'shark' || bitingFish.kind === 'whale';
+    const fx = hook.x + (mega ? 70 : 40);
+    const fy = hook.y + (mega ? 30 : 18) + calcBobberDip(8, 0.02);
+    drawCreature({ type: bitingFish }, fx, fy, -1, creatureBiteScale(bitingFish), true, 1);
   }
 }
 
@@ -860,14 +1026,15 @@ function drawCelebration() {
   const cx = width * 0.5;
   const cy = height * 0.42;
   const bounce = Math.abs(Math.sin(Date.now() * 0.006)) * 12;
-  drawFish({ type: caughtFish }, cx, cy - bounce, 1, 1.8, true, 1);
+  const mega = caughtFish.kind === 'shark' || caughtFish.kind === 'whale';
+  drawCreature({ type: caughtFish }, cx, cy - bounce, 1, creatureCelebrateScale(caughtFish), true, 1);
 
-  ctx.fillStyle = '#fee440';
+  ctx.fillStyle = mega ? '#48cae4' : '#fee440';
   ctx.font = `bold ${Math.floor(width * 0.04)}px Fredoka, sans-serif`;
   ctx.textAlign = 'center';
   ctx.shadowColor = 'rgba(0,0,0,0.3)';
   ctx.shadowBlur = 8;
-  ctx.fillText('CAUGHT!', cx, cy - 90);
+  ctx.fillText(mega ? 'MEGA CATCH!' : 'CAUGHT!', cx, cy - (mega ? 120 : 90));
   ctx.shadowBlur = 0;
 
   for (let i = 0; i < 10; i++) {

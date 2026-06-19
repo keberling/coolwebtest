@@ -281,6 +281,13 @@ html, body {
   border-color: #ffd60a;
 }
 
+.bucket-list li.mega {
+  background: #caf0f8;
+  border-color: #0077b6;
+  color: #023e8a;
+  font-weight: 700;
+}
+
 @media (max-height: 620px) {
   .bucket {
     display: none;
