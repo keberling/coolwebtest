@@ -171,6 +171,37 @@ body:hover .skip-hint {
   opacity: 1;
 }
 
+.worm-score {
+  margin-top: 0.75rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+}
+
+.worm-score.hidden {
+  display: none;
+}
+
+.worm-score.hit-flash {
+  animation: hitPulse 0.35s ease;
+}
+
+@keyframes hitPulse {
+  0% { transform: scale(1); color: var(--accent); }
+  50% { transform: scale(1.15); color: #fee440; }
+  100% { transform: scale(1); color: var(--accent); }
+}
+
+body.worm-game {
+  cursor: crosshair;
+}
+
+body.fish-prize {
+  cursor: default;
+}
+
 .log {
   justify-self: start;
   max-width: 320px;

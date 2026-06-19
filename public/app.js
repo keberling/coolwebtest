@@ -1,5 +1,7 @@
 const INTERVAL_MS = 10000;
 const CLICKS_FOR_WORM = 15;
+const WORM_HITS_TO_WIN = 8;
+const FISH_PRIZE_MS = 6000;
 
 const canvas = document.getElementById('fx-canvas');
 const ctx = canvas.getContext('2d');
@@ -10,6 +12,8 @@ const countdownBar = document.getElementById('countdown-bar');
 const countdownText = document.getElementById('countdown-text');
 const effectLog = document.getElementById('effect-log');
 const glitchOverlay = document.getElementById('glitch-overlay');
+const skipHint = document.getElementById('skip-hint');
+const wormScoreEl = document.getElementById('worm-score');
 
 let width = 0;
 let height = 0;
@@ -29,6 +33,13 @@ let wormProgress = 0;
 let wormSegments = [];
 let wormBites = [];
 let wormResetTimeout = null;
+let wormHits = 0;
+let wormHitFlash = 0;
+let wormMissFlash = 0;
+let fishPrizeActive = false;
+let fishPrizeStart = 0;
+let fishBubbles = [];
+let fishSparkles = [];
 
 const palette = ['#00f5d4', '#9b5de5', '#fee440', '#f15bb5', '#00bbf9', '#ff6b6b', '#06d6a0'];
 
@@ -764,13 +775,13 @@ function getWormHead() {
   return { x, y, angle };
 }
 
-function drawWormHead(x, y, angle, chomp) {
+function drawWormHead(x, y, angle, chomp, hitFlash) {
   wormCtx.save();
   wormCtx.translate(x, y);
   wormCtx.rotate(angle);
 
   const mouthOpen = 0.4 + chomp * 0.55;
-  wormCtx.fillStyle = '#06d6a0';
+  wormCtx.fillStyle = hitFlash > 0.3 ? '#fee440' : '#06d6a0';
   wormCtx.beginPath();
   wormCtx.arc(0, 0, 18, 0, Math.PI * 2);
   wormCtx.fill();
@@ -819,8 +830,205 @@ function drawWormSegment(x, y, radius, color) {
   wormCtx.stroke();
 }
 
+function isClickOnWorm(x, y) {
+  const head = getWormHead();
+  if (Math.hypot(x - head.x, y - head.y) < 34) return true;
+  for (let i = 0; i < wormSegments.length; i++) {
+    const seg = wormSegments[i];
+    const radius = Math.max(8, 16 - i * 0.4);
+    if (Math.hypot(x - seg.x, y - seg.y) < radius + 6) return true;
+  }
+  return false;
+}
+
+function updateWormScore() {
+  wormScoreEl.textContent = `${wormHits} / ${WORM_HITS_TO_WIN} hits`;
+}
+
+function drawHugeFish(t) {
+  fullClear();
+
+  const elapsed = t - fishPrizeStart;
+  const grow = Math.min(1, elapsed / 1200);
+  const bounce = 1 + Math.sin(elapsed * 0.004) * 0.04;
+  const scale = (0.2 + grow * 0.8 * bounce) * Math.min(width, height) / 500;
+  const cx = width / 2;
+  const cy = height / 2 + Math.sin(elapsed * 0.003) * 12;
+
+  const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 280 * scale);
+  glow.addColorStop(0, 'rgba(254, 228, 64, 0.35)');
+  glow.addColorStop(0.5, 'rgba(0, 245, 212, 0.15)');
+  glow.addColorStop(1, 'transparent');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, width, height);
+
+  fishSparkles.forEach((s) => {
+    s.y -= s.speed;
+    s.twinkle += 0.1;
+    if (s.y < -10) {
+      s.y = height + 10;
+      s.x = rand(0, width);
+    }
+    ctx.fillStyle = `rgba(255, 255, 255, ${0.4 + Math.sin(s.twinkle) * 0.4})`;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  fishBubbles.forEach((b) => {
+    b.y -= b.speed;
+    b.x += Math.sin(elapsed * 0.002 + b.phase) * 0.5;
+    if (b.y < -20) b.y = height + 20;
+    ctx.strokeStyle = `rgba(0, 245, 212, ${b.alpha})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.stroke();
+  });
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(scale, scale);
+  ctx.rotate(Math.sin(elapsed * 0.002) * 0.08);
+
+  ctx.fillStyle = '#ff6b35';
+  ctx.beginPath();
+  ctx.moveTo(120, 0);
+  ctx.quadraticCurveTo(60, -55, -80, -30);
+  ctx.quadraticCurveTo(-200, -10, -260, 0);
+  ctx.quadraticCurveTo(-200, 10, -80, 30);
+  ctx.quadraticCurveTo(60, 55, 120, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = '#e85d04';
+  ctx.beginPath();
+  ctx.moveTo(-250, 0);
+  ctx.lineTo(-320, -50);
+  ctx.lineTo(-300, 0);
+  ctx.lineTo(-320, 50);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = '#f48c06';
+  ctx.beginPath();
+  ctx.moveTo(-40, -35);
+  ctx.lineTo(-10, -80);
+  ctx.lineTo(20, -35);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(10, 35);
+  ctx.lineTo(40, 75);
+  ctx.lineTo(70, 35);
+  ctx.closePath();
+  ctx.fill();
+
+  for (let i = 0; i < 9; i++) {
+    const sx = -180 + i * 38;
+    const sy = (i % 2) * 16 - 8;
+    ctx.fillStyle = 'rgba(255, 200, 100, 0.45)';
+    ctx.beginPath();
+    ctx.arc(sx, sy, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(55, -18, 22, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#023047';
+  ctx.beginPath();
+  ctx.arc(62, -18, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(66, -22, 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#ffd60a';
+  ctx.font = 'bold 28px Space Grotesk, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('PRIZE FISH', 0, -110);
+
+  ctx.restore();
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+  ctx.font = `bold ${Math.floor(24 + grow * 20)}px Space Grotesk, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText('YOU CAUGHT THE HUGE FISH!', cx, 60 * scale + cy + 120 * scale);
+}
+
+function initFishPrizeFx() {
+  fishBubbles = Array.from({ length: 30 }, () => ({
+    x: rand(0, width),
+    y: rand(0, height),
+    r: rand(3, 12),
+    speed: rand(0.5, 2),
+    alpha: rand(0.2, 0.5),
+    phase: rand(0, Math.PI * 2),
+  }));
+  fishSparkles = Array.from({ length: 50 }, () => ({
+    x: rand(0, width),
+    y: rand(0, height),
+    size: rand(1, 3),
+    speed: rand(0.3, 1.2),
+    twinkle: rand(0, Math.PI * 2),
+  }));
+}
+
+function endWormGame() {
+  wormActive = false;
+  wormHits = 0;
+  wormHitFlash = 0;
+  wormMissFlash = 0;
+  wormCtx.clearRect(0, 0, width, height);
+  wormBites = [];
+  wormSegments = [];
+  wormProgress = 0;
+  document.body.classList.remove('worm-game');
+  wormScoreEl.classList.add('hidden');
+  skipHint.textContent = 'click anywhere to skip';
+}
+
+function triggerFishPrize() {
+  clearTimeout(wormResetTimeout);
+  wormResetTimeout = null;
+  endWormGame();
+  fishPrizeActive = true;
+  fishPrizeStart = Date.now();
+  document.body.classList.add('fish-prize');
+  initFishPrizeFx();
+  setEffectName('HUGE FISH!!!');
+  logEffect('You won the huge fish!');
+  skipHint.textContent = 'enjoy your prize...';
+
+  setTimeout(() => {
+    fishPrizeActive = false;
+    document.body.classList.remove('fish-prize');
+    skipHint.textContent = 'click anywhere to skip';
+    triggerRandomEffect();
+    scheduleNextEffect();
+  }, FISH_PRIZE_MS);
+}
+
+function wormGameLose() {
+  setEffectName('Burp. Worm wins.');
+  logEffect('Worm ate the screen');
+  wormResetTimeout = setTimeout(() => {
+    wormResetTimeout = null;
+    endWormGame();
+    triggerRandomEffect();
+    scheduleNextEffect();
+  }, 2000);
+}
+
 function updateWorm() {
-  wormProgress += 0.55;
+  if (wormHitFlash > 0) wormHitFlash -= 0.08;
+  wormProgress += wormHitFlash > 0.5 ? 0.15 : 0.55;
   const head = getWormHead();
   const chomp = Math.abs(Math.sin(Date.now() * 0.02));
 
@@ -831,6 +1039,7 @@ function updateWorm() {
   const maxSegments = 28;
   if (wormSegments.length > maxSegments) wormSegments.length = maxSegments;
 
+  wormCtx.clearRect(0, 0, width, height);
   wormCtx.fillStyle = '#07070d';
   wormBites.forEach((bite) => {
     wormCtx.beginPath();
@@ -843,23 +1052,24 @@ function updateWorm() {
     const seg = wormSegments[i];
     const radius = 14 - i * 0.35;
     if (radius < 4) continue;
-    drawWormSegment(seg.x, seg.y, radius, colors[i % colors.length]);
+    const color = wormHitFlash > 0.3 && i < 4 ? '#fee440' : colors[i % colors.length];
+    drawWormSegment(seg.x, seg.y, radius, color);
   }
 
-  drawWormHead(head.x, head.y, head.angle, chomp);
+  drawWormHead(head.x, head.y, head.angle, chomp, wormHitFlash);
+
+  if (wormMissFlash > 0) {
+    wormMissFlash -= 0.05;
+    wormCtx.fillStyle = `rgba(255, 0, 110, ${wormMissFlash * 0.25})`;
+    wormCtx.fillRect(0, 0, width, height);
+  }
+
+  const eaten = wormProgress / Math.max(1, wormPath.length - 1);
+  countdownBar.style.transform = `scaleX(${eaten})`;
+  countdownText.textContent = `${WORM_HITS_TO_WIN - wormHits} to win`;
 
   if (wormProgress >= wormPath.length - 1 && !wormResetTimeout) {
-    setEffectName('Burp.');
-    wormResetTimeout = setTimeout(() => {
-      wormActive = false;
-      wormCtx.clearRect(0, 0, width, height);
-      wormBites = [];
-      wormSegments = [];
-      wormProgress = 0;
-      wormResetTimeout = null;
-      triggerRandomEffect();
-      scheduleNextEffect();
-    }, 2000);
+    wormGameLose();
   }
 }
 
@@ -868,17 +1078,53 @@ function triggerWorm() {
   clearTimeout(wormResetTimeout);
   wormResetTimeout = null;
   wormActive = true;
+  wormHits = 0;
+  wormHitFlash = 0;
+  wormMissFlash = 0;
   wormPath = generateWormPath();
   wormProgress = 0;
   wormSegments = [];
   wormBites = [];
   wormCtx.clearRect(0, 0, width, height);
-  setEffectName('Screen Worm!');
-  logEffect('Screen Worm!');
+  document.body.classList.add('worm-game');
+  document.body.classList.remove('fish-prize');
+  wormScoreEl.classList.remove('hidden');
+  updateWormScore();
+  skipHint.textContent = 'click the worm to win a huge fish!';
+  setEffectName('Catch the Worm!');
+  logEffect('Worm game started');
+  countdownBar.style.transform = 'scaleX(0)';
+  countdownText.textContent = `${WORM_HITS_TO_WIN} to win`;
 }
 
-function skipEffect() {
-  if (wormActive) return;
+function handleWormClick(x, y) {
+  if (isClickOnWorm(x, y)) {
+    wormHits += 1;
+    wormHitFlash = 1;
+    updateWormScore();
+    wormScoreEl.classList.remove('hit-flash');
+    void wormScoreEl.offsetWidth;
+    wormScoreEl.classList.add('hit-flash');
+
+    if (wormHits >= WORM_HITS_TO_WIN) {
+      triggerFishPrize();
+    }
+  } else {
+    wormMissFlash = 1;
+    skipHint.textContent = 'miss! aim for the worm';
+    setTimeout(() => {
+      if (wormActive) skipHint.textContent = 'click the worm to win a huge fish!';
+    }, 600);
+  }
+}
+
+function handleClick(e) {
+  if (fishPrizeActive) return;
+
+  if (wormActive) {
+    handleWormClick(e.clientX, e.clientY);
+    return;
+  }
 
   clickCount += 1;
   if (clickCount >= CLICKS_FOR_WORM) {
@@ -892,24 +1138,28 @@ function skipEffect() {
 }
 
 function animate() {
-  if (wormActive) {
+  if (fishPrizeActive) {
+    drawHugeFish(Date.now());
+  } else if (wormActive) {
     if (activeEffect) activeEffect.draw();
     updateWorm();
   } else if (activeEffect) {
     activeEffect.draw();
   }
 
-  const elapsed = Date.now() - countdownStart;
-  const remaining = Math.max(0, INTERVAL_MS - elapsed);
-  const progress = 1 - remaining / INTERVAL_MS;
-  countdownBar.style.transform = `scaleX(${progress})`;
-  countdownText.textContent = `${Math.ceil(remaining / 1000)}s`;
+  if (!wormActive && !fishPrizeActive) {
+    const elapsed = Date.now() - countdownStart;
+    const remaining = Math.max(0, INTERVAL_MS - elapsed);
+    const progress = 1 - remaining / INTERVAL_MS;
+    countdownBar.style.transform = `scaleX(${progress})`;
+    countdownText.textContent = `${Math.ceil(remaining / 1000)}s`;
+  }
 
   animationId = requestAnimationFrame(animate);
 }
 
 window.addEventListener('resize', resize);
-document.addEventListener('click', skipEffect);
+document.addEventListener('click', handleClick);
 resize();
 triggerRandomEffect();
 scheduleNextEffect();
