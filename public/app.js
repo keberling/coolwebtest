@@ -1,5 +1,4 @@
 const INTERVAL_MS = 10000;
-const EFFECT_DURATION_MS = 3500;
 
 const canvas = document.getElementById('fx-canvas');
 const ctx = canvas.getContext('2d');
@@ -16,9 +15,9 @@ let stars = [];
 let matrixDrops = [];
 let animationId = null;
 let activeEffect = null;
-let effectEndTime = 0;
 let lastEffectIndex = -1;
 let countdownStart = Date.now();
+let effectTimeouts = [];
 
 const palette = ['#00f5d4', '#9b5de5', '#fee440', '#f15bb5', '#00bbf9', '#ff6b6b', '#06d6a0'];
 
@@ -75,6 +74,21 @@ const effects = [
     },
     draw() {
       fullClear();
+      if (particles.length < 80) {
+        for (let i = 0; i < 40; i++) {
+          particles.push({
+            x: width / 2,
+            y: height / 2,
+            vx: rand(-12, 12),
+            vy: rand(-14, 4),
+            size: rand(4, 10),
+            color: pickColor(),
+            rotation: rand(0, Math.PI * 2),
+            spin: rand(-0.2, 0.2),
+            gravity: rand(0.15, 0.35),
+          });
+        }
+      }
       particles.forEach((p) => {
         p.vy += p.gravity;
         p.x += p.vx;
@@ -87,6 +101,7 @@ const effects = [
         ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
         ctx.restore();
       });
+      particles = particles.filter((p) => p.y < height + 40 && p.x > -40 && p.x < width + 40);
     },
   },
   {
@@ -133,10 +148,15 @@ const effects = [
     draw() {
       fullClear();
       const now = Date.now();
+      let allDone = true;
       particles.forEach((p) => {
-        if (now - p.born < p.delay) return;
+        if (now - p.born < p.delay) {
+          allDone = false;
+          return;
+        }
         p.radius += p.speed;
         if (p.radius > p.maxRadius) return;
+        allDone = false;
         const alpha = 1 - p.radius / p.maxRadius;
         ctx.strokeStyle = p.color;
         ctx.globalAlpha = alpha * 0.8;
@@ -146,6 +166,7 @@ const effects = [
         ctx.stroke();
         ctx.globalAlpha = 1;
       });
+      if (allDone) this.setup();
     },
   },
   {
@@ -184,11 +205,14 @@ const effects = [
     name: 'Firework Bloom',
     setup() {
       particles = [];
-      for (let i = 0; i < 5; i++) {
-        setTimeout(() => launchFirework(), i * 400);
-      }
+      this.lastFirework = 0;
     },
     draw() {
+      const now = Date.now();
+      if (now - this.lastFirework > 1200) {
+        launchFirework();
+        this.lastFirework = now;
+      }
       ctx.fillStyle = 'rgba(7, 7, 13, 0.18)';
       ctx.fillRect(0, 0, width, height);
       particles.forEach((p) => {
@@ -298,12 +322,7 @@ const effects = [
   {
     name: 'Glitch Storm',
     setup() {
-      document.body.classList.add('shake');
-      glitchOverlay.classList.add('active');
-      setTimeout(() => {
-        document.body.classList.remove('shake');
-        glitchOverlay.classList.remove('active');
-      }, 1800);
+      this.lastBurst = 0;
       particles = Array.from({ length: 40 }, () => ({
         x: rand(0, width),
         y: rand(0, height),
@@ -312,11 +331,36 @@ const effects = [
         color: pickColor(),
         life: 1,
       }));
+      this.triggerBurst();
+    },
+    triggerBurst() {
+      document.body.classList.add('shake');
+      glitchOverlay.classList.add('active');
+      const timeout = setTimeout(() => {
+        document.body.classList.remove('shake');
+        glitchOverlay.classList.remove('active');
+      }, 700);
+      effectTimeouts.push(timeout);
+      for (let i = 0; i < 20; i++) {
+        particles.push({
+          x: rand(0, width),
+          y: rand(0, height),
+          w: rand(40, 300),
+          h: rand(2, 12),
+          color: pickColor(),
+          life: 1,
+        });
+      }
     },
     draw() {
+      const now = Date.now();
+      if (now - this.lastBurst > 2000) {
+        this.lastBurst = now;
+        this.triggerBurst();
+      }
       fullClear();
       particles.forEach((p) => {
-        p.life -= 0.03;
+        p.life -= 0.02;
         if (p.life <= 0) return;
         ctx.globalAlpha = p.life;
         ctx.fillStyle = p.color;
@@ -371,7 +415,6 @@ const effects = [
     name: 'Reality Invert',
     setup() {
       document.body.classList.add('invert');
-      setTimeout(() => document.body.classList.remove('invert'), EFFECT_DURATION_MS);
       particles = Array.from({ length: 80 }, () => ({
         x: rand(0, width),
         y: rand(0, height),
@@ -486,9 +529,16 @@ function logEffect(name) {
   }
 }
 
+function cleanupEffect() {
+  effectTimeouts.forEach(clearTimeout);
+  effectTimeouts = [];
+  document.body.classList.remove('shake', 'invert');
+  glitchOverlay.classList.remove('active');
+}
+
 function startEffect(effect) {
+  cleanupEffect();
   activeEffect = effect;
-  effectEndTime = Date.now() + EFFECT_DURATION_MS;
   setEffectName(effect.name);
   logEffect(effect.name);
   fullClear();
@@ -501,11 +551,8 @@ function triggerRandomEffect() {
 }
 
 function animate() {
-  if (activeEffect && Date.now() < effectEndTime) {
+  if (activeEffect) {
     activeEffect.draw();
-  } else if (activeEffect) {
-    activeEffect = null;
-    fullClear();
   }
 
   const elapsed = Date.now() - countdownStart;
