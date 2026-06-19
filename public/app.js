@@ -470,7 +470,170 @@ const effects = [
       });
     },
   },
+  {
+    name: 'Boat Parade',
+    setup() {
+      this.waterLevel = height * 0.62;
+      this.waveOffset = 0;
+      particles = Array.from({ length: Math.floor(rand(7, 11)) }, () => ({
+        x: rand(-width * 0.2, width * 1.2),
+        speed: rand(0.5, 1.4) * (Math.random() > 0.5 ? 1 : -1),
+        size: rand(0.7, 1.5),
+        hullColor: pickColor(),
+        sailColor: pickColor(),
+        phase: rand(0, Math.PI * 2),
+        bob: rand(0.02, 0.04),
+        wake: [],
+      }));
+    },
+    draw() {
+      const water = this.waterLevel;
+      this.waveOffset += 0.035;
+      const t = Date.now() * 0.001;
+
+      const sky = ctx.createLinearGradient(0, 0, 0, water);
+      sky.addColorStop(0, '#050818');
+      sky.addColorStop(0.5, '#0c1a3a');
+      sky.addColorStop(1, '#12345f');
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, width, height);
+
+      for (let i = 0; i < 60; i++) {
+        const sx = (i * 137.5 + t * 8) % width;
+        const sy = (i * 53.7) % (water * 0.7);
+        const twinkle = 0.3 + Math.sin(t * 2 + i) * 0.3;
+        ctx.fillStyle = `rgba(255, 255, 255, ${twinkle})`;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 1 + (i % 3) * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      const moonX = width * 0.78;
+      const moonY = height * 0.14;
+      const moonGlow = ctx.createRadialGradient(moonX, moonY, 0, moonX, moonY, 80);
+      moonGlow.addColorStop(0, 'rgba(254, 228, 64, 0.35)');
+      moonGlow.addColorStop(1, 'transparent');
+      ctx.fillStyle = moonGlow;
+      ctx.fillRect(moonX - 80, moonY - 80, 160, 160);
+      ctx.fillStyle = '#fee440';
+      ctx.beginPath();
+      ctx.arc(moonX, moonY, 22, 0, Math.PI * 2);
+      ctx.fill();
+
+      const sea = ctx.createLinearGradient(0, water - 40, 0, height);
+      sea.addColorStop(0, '#0a4d6e');
+      sea.addColorStop(0.4, '#063a55');
+      sea.addColorStop(1, '#021a2b');
+      ctx.fillStyle = sea;
+      ctx.fillRect(0, water - 30, width, height - water + 30);
+
+      ctx.beginPath();
+      ctx.moveTo(0, waveHeight(0, water, this.waveOffset));
+      for (let x = 0; x <= width; x += 6) {
+        ctx.lineTo(x, waveHeight(x, water, this.waveOffset));
+      }
+      ctx.lineTo(width, height);
+      ctx.lineTo(0, height);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(0, 245, 212, 0.08)';
+      ctx.fill();
+
+      ctx.strokeStyle = 'rgba(0, 245, 212, 0.25)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, waveHeight(0, water, this.waveOffset));
+      for (let x = 0; x <= width; x += 4) {
+        ctx.lineTo(x, waveHeight(x, water, this.waveOffset));
+      }
+      ctx.stroke();
+
+      particles.forEach((boat) => {
+        boat.x += boat.speed;
+        if (boat.speed > 0 && boat.x > width + 120) boat.x = -120;
+        if (boat.speed < 0 && boat.x < -120) boat.x = width + 120;
+
+        const y = waveHeight(boat.x, water, this.waveOffset)
+          + Math.sin(t * 3 + boat.phase) * 4
+          - 8 * boat.size;
+        const tilt = Math.cos(boat.x * 0.008 + this.waveOffset) * 0.06 * boat.speed;
+
+        boat.wake.push({ x: boat.x - boat.speed * 10, y: y + 10 * boat.size, life: 1 });
+        if (boat.wake.length > 12) boat.wake.shift();
+        boat.wake.forEach((w) => {
+          w.life -= 0.04;
+          ctx.globalAlpha = w.life * 0.35;
+          ctx.fillStyle = '#00f5d4';
+          ctx.beginPath();
+          ctx.ellipse(w.x, w.y, 10 * boat.size, 3 * boat.size, 0, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+
+        ctx.save();
+        ctx.translate(boat.x, y);
+        ctx.rotate(tilt);
+        drawBoat(0, 0, boat.size, boat.hullColor, boat.sailColor, boat.speed);
+        ctx.restore();
+      });
+    },
+  },
 ];
+
+function waveHeight(x, waterLevel, offset) {
+  return waterLevel
+    + Math.sin(x * 0.008 + offset) * 14
+    + Math.sin(x * 0.02 + offset * 1.4) * 7;
+}
+
+function drawBoat(x, y, scale, hullColor, sailColor, direction) {
+  const s = scale;
+  const dir = direction >= 0 ? 1 : -1;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(dir, 1);
+
+  ctx.fillStyle = 'rgba(0, 245, 212, 0.15)';
+  ctx.beginPath();
+  ctx.ellipse(-18 * s, 8 * s, 22 * s, 5 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = hullColor;
+  ctx.beginPath();
+  ctx.moveTo(-28 * s, 0);
+  ctx.quadraticCurveTo(-10 * s, 14 * s, 18 * s, 10 * s);
+  ctx.lineTo(22 * s, 4 * s);
+  ctx.quadraticCurveTo(0, -2 * s, -28 * s, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+  ctx.lineWidth = 1.5 * s;
+  ctx.beginPath();
+  ctx.moveTo(2 * s, 4 * s);
+  ctx.lineTo(2 * s, -38 * s);
+  ctx.stroke();
+
+  ctx.fillStyle = sailColor;
+  ctx.globalAlpha = 0.9;
+  ctx.beginPath();
+  ctx.moveTo(2 * s, -36 * s);
+  ctx.lineTo(2 * s, -6 * s);
+  ctx.lineTo(26 * s, -18 * s);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.beginPath();
+  ctx.moveTo(2 * s, -34 * s);
+  ctx.lineTo(2 * s, -10 * s);
+  ctx.lineTo(-18 * s, -20 * s);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  ctx.restore();
+}
 
 function generateLightningPath() {
   const points = [{ x: rand(0, width), y: 0 }];
