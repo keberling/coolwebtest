@@ -1,7 +1,7 @@
 {
-  "name": "random-cool",
-  "version": "1.0.0",
-  "description": "A web app that does something cool at random every 10 seconds",
+  "name": "fishys-pond",
+  "version": "2.0.0",
+  "description": "A fun fishing game for kids",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

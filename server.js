@@ -15,5 +15,5 @@ app.get('*', (_req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Random Cool running on port ${PORT}`);
+  console.log(`Fishy's Pond running on port ${PORT}`);
 });

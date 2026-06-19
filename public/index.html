@@ -3,43 +3,50 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Random Cool</title>
+  <title>Fishy's Pond</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <canvas id="fx-canvas"></canvas>
-  <canvas id="worm-canvas"></canvas>
-  <div class="vignette"></div>
-
-  <main class="hud">
-    <header class="brand">
-      <span class="brand-dot"></span>
-      <span>Random Cool</span>
+  <div class="game">
+    <header class="top-bar">
+      <div class="title-block">
+        <h1>Fishy's Pond</h1>
+        <p class="subtitle">cast, wait, reel — catch 'em all!</p>
+      </div>
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-label">Caught</span>
+          <span id="caught-count" class="stat-value">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Score</span>
+          <span id="score" class="stat-value">0</span>
+        </div>
+      </div>
     </header>
 
-    <section class="stage">
-      <p class="label">Now doing</p>
-      <h1 id="effect-name" class="effect-name">Warming up...</h1>
-      <div class="countdown">
-        <div class="countdown-track">
-          <div id="countdown-bar" class="countdown-bar"></div>
-        </div>
-        <span id="countdown-text" class="countdown-text">10s</span>
-      </div>
-      <p id="skip-hint" class="skip-hint">click to skip · spacebar for fish jump</p>
-      <p id="worm-score" class="worm-score hidden">0 / 8 hits</p>
+    <div class="pond-wrap">
+      <canvas id="game" aria-label="Fishing pond"></canvas>
+      <div id="bite-alert" class="bite-alert hidden" aria-live="assertive">FISH ON!</div>
+    </div>
+
+    <div class="controls">
+      <button id="cast-btn" class="btn btn-cast" type="button">Cast Line</button>
+      <button id="reel-btn" class="btn btn-reel hidden" type="button">Reel In!</button>
+    </div>
+
+    <p id="message" class="message" aria-live="polite">Tap Cast Line to start fishing!</p>
+
+    <section class="bucket">
+      <h2>Your Bucket</h2>
+      <ul id="bucket-list" class="bucket-list">
+        <li class="empty">No fish yet — go catch some!</li>
+      </ul>
     </section>
-
-    <footer class="log">
-      <p class="label">Recent chaos</p>
-      <ul id="effect-log" class="effect-log"></ul>
-    </footer>
-  </main>
-
-  <div id="glitch-overlay" class="glitch-overlay" aria-hidden="true"></div>
+  </div>
 
   <script src="app.js"></script>
 </body>
