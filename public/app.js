@@ -1,7 +1,10 @@
 const INTERVAL_MS = 10000;
+const CLICKS_FOR_WORM = 15;
 
 const canvas = document.getElementById('fx-canvas');
 const ctx = canvas.getContext('2d');
+const wormCanvas = document.getElementById('worm-canvas');
+const wormCtx = wormCanvas.getContext('2d');
 const effectNameEl = document.getElementById('effect-name');
 const countdownBar = document.getElementById('countdown-bar');
 const countdownText = document.getElementById('countdown-text');
@@ -19,12 +22,21 @@ let lastEffectIndex = -1;
 let countdownStart = Date.now();
 let effectTimeouts = [];
 let nextEffectTimeout = null;
+let clickCount = 0;
+let wormActive = false;
+let wormPath = [];
+let wormProgress = 0;
+let wormSegments = [];
+let wormBites = [];
+let wormResetTimeout = null;
 
 const palette = ['#00f5d4', '#9b5de5', '#fee440', '#f15bb5', '#00bbf9', '#ff6b6b', '#06d6a0'];
 
 function resize() {
   width = canvas.width = window.innerWidth;
   height = canvas.height = window.innerHeight;
+  wormCanvas.width = width;
+  wormCanvas.height = height;
   initStars();
 }
 
@@ -722,13 +734,168 @@ function scheduleNextEffect() {
   }, INTERVAL_MS);
 }
 
+function generateWormPath() {
+  const path = [];
+  const rowStep = 36;
+  const colStep = 18;
+  const margin = 24;
+
+  for (let y = margin; y < height - margin; y += rowStep) {
+    const row = Math.floor((y - margin) / rowStep);
+    const leftToRight = row % 2 === 0;
+    if (leftToRight) {
+      for (let x = margin; x < width - margin; x += colStep) path.push({ x, y });
+    } else {
+      for (let x = width - margin; x > margin; x -= colStep) path.push({ x, y });
+    }
+  }
+  return path;
+}
+
+function getWormHead() {
+  if (wormPath.length < 2) return wormPath[0] || { x: 0, y: 0, angle: 0 };
+  const idx = Math.min(Math.floor(wormProgress), wormPath.length - 2);
+  const t = wormProgress - idx;
+  const a = wormPath[idx];
+  const b = wormPath[idx + 1];
+  const x = a.x + (b.x - a.x) * t;
+  const y = a.y + (b.y - a.y) * t;
+  const angle = Math.atan2(b.y - a.y, b.x - a.x);
+  return { x, y, angle };
+}
+
+function drawWormHead(x, y, angle, chomp) {
+  wormCtx.save();
+  wormCtx.translate(x, y);
+  wormCtx.rotate(angle);
+
+  const mouthOpen = 0.4 + chomp * 0.55;
+  wormCtx.fillStyle = '#06d6a0';
+  wormCtx.beginPath();
+  wormCtx.arc(0, 0, 18, 0, Math.PI * 2);
+  wormCtx.fill();
+
+  wormCtx.fillStyle = '#048a5e';
+  wormCtx.beginPath();
+  wormCtx.arc(-6, -5, 4, 0, Math.PI * 2);
+  wormCtx.arc(6, -5, 4, 0, Math.PI * 2);
+  wormCtx.fill();
+
+  wormCtx.fillStyle = '#fff';
+  wormCtx.beginPath();
+  wormCtx.arc(-6, -5, 1.8, 0, Math.PI * 2);
+  wormCtx.arc(6, -5, 1.8, 0, Math.PI * 2);
+  wormCtx.fill();
+
+  wormCtx.fillStyle = '#023020';
+  wormCtx.beginPath();
+  wormCtx.arc(-6, -5, 0.9, 0, Math.PI * 2);
+  wormCtx.arc(6, -5, 0.9, 0, Math.PI * 2);
+  wormCtx.fill();
+
+  wormCtx.fillStyle = '#ff006e';
+  wormCtx.beginPath();
+  wormCtx.arc(14, 2, 10, -mouthOpen, mouthOpen);
+  wormCtx.lineTo(0, 0);
+  wormCtx.closePath();
+  wormCtx.fill();
+
+  wormCtx.strokeStyle = '#9b0050';
+  wormCtx.lineWidth = 2;
+  wormCtx.beginPath();
+  wormCtx.arc(14, 2, 10, -mouthOpen, mouthOpen);
+  wormCtx.stroke();
+
+  wormCtx.restore();
+}
+
+function drawWormSegment(x, y, radius, color) {
+  wormCtx.fillStyle = color;
+  wormCtx.beginPath();
+  wormCtx.arc(x, y, radius, 0, Math.PI * 2);
+  wormCtx.fill();
+  wormCtx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
+  wormCtx.lineWidth = 2;
+  wormCtx.stroke();
+}
+
+function updateWorm() {
+  wormProgress += 0.55;
+  const head = getWormHead();
+  const chomp = Math.abs(Math.sin(Date.now() * 0.02));
+
+  wormBites.push({ x: head.x, y: head.y, r: 22 + chomp * 10 });
+  if (wormBites.length > 600) wormBites.shift();
+
+  wormSegments.unshift({ x: head.x, y: head.y });
+  const maxSegments = 28;
+  if (wormSegments.length > maxSegments) wormSegments.length = maxSegments;
+
+  wormCtx.fillStyle = '#07070d';
+  wormBites.forEach((bite) => {
+    wormCtx.beginPath();
+    wormCtx.arc(bite.x, bite.y, bite.r, 0, Math.PI * 2);
+    wormCtx.fill();
+  });
+
+  const colors = ['#06d6a0', '#05c293', '#04a87f', '#048a6c'];
+  for (let i = wormSegments.length - 1; i > 0; i--) {
+    const seg = wormSegments[i];
+    const radius = 14 - i * 0.35;
+    if (radius < 4) continue;
+    drawWormSegment(seg.x, seg.y, radius, colors[i % colors.length]);
+  }
+
+  drawWormHead(head.x, head.y, head.angle, chomp);
+
+  if (wormProgress >= wormPath.length - 1 && !wormResetTimeout) {
+    setEffectName('Burp.');
+    wormResetTimeout = setTimeout(() => {
+      wormActive = false;
+      wormCtx.clearRect(0, 0, width, height);
+      wormBites = [];
+      wormSegments = [];
+      wormProgress = 0;
+      wormResetTimeout = null;
+      triggerRandomEffect();
+      scheduleNextEffect();
+    }, 2000);
+  }
+}
+
+function triggerWorm() {
+  clearTimeout(nextEffectTimeout);
+  clearTimeout(wormResetTimeout);
+  wormResetTimeout = null;
+  wormActive = true;
+  wormPath = generateWormPath();
+  wormProgress = 0;
+  wormSegments = [];
+  wormBites = [];
+  wormCtx.clearRect(0, 0, width, height);
+  setEffectName('Screen Worm!');
+  logEffect('Screen Worm!');
+}
+
 function skipEffect() {
+  if (wormActive) return;
+
+  clickCount += 1;
+  if (clickCount >= CLICKS_FOR_WORM) {
+    clickCount = 0;
+    triggerWorm();
+    return;
+  }
+
   triggerRandomEffect();
   scheduleNextEffect();
 }
 
 function animate() {
-  if (activeEffect) {
+  if (wormActive) {
+    if (activeEffect) activeEffect.draw();
+    updateWorm();
+  } else if (activeEffect) {
     activeEffect.draw();
   }
 
