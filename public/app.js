@@ -53,8 +53,8 @@ let reelT = 0;
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
-  width = window.innerWidth;
-  height = window.innerHeight;
+  width = document.documentElement.clientWidth;
+  height = document.documentElement.clientHeight;
   canvas.width = Math.floor(width * dpr);
   canvas.height = Math.floor(height * dpr);
   canvas.style.width = `${width}px`;
