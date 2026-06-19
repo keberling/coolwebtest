@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Random Cool</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <canvas id="fx-canvas"></canvas>
+  <div class="vignette"></div>
+
+  <main class="hud">
+    <header class="brand">
+      <span class="brand-dot"></span>
+      <span>Random Cool</span>
+    </header>
+
+    <section class="stage">
+      <p class="label">Now doing</p>
+      <h1 id="effect-name" class="effect-name">Warming up...</h1>
+      <div class="countdown">
+        <div class="countdown-track">
+          <div id="countdown-bar" class="countdown-bar"></div>
+        </div>
+        <span id="countdown-text" class="countdown-text">10s</span>
+      </div>
+    </section>
+
+    <footer class="log">
+      <p class="label">Recent chaos</p>
+      <ul id="effect-log" class="effect-log"></ul>
+    </footer>
+  </main>
+
+  <div id="glitch-overlay" class="glitch-overlay" aria-hidden="true"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
