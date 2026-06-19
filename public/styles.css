@@ -21,6 +21,7 @@ html, body {
   background: var(--bg);
   color: var(--text);
   font-family: 'Space Grotesk', system-ui, sans-serif;
+  cursor: pointer;
 }
 
 #fx-canvas {
@@ -145,6 +146,20 @@ html, body {
   font-size: 0.9rem;
   color: var(--muted);
   min-width: 2.5rem;
+}
+
+.skip-hint {
+  margin-top: 1.25rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+body:hover .skip-hint {
+  opacity: 1;
 }
 
 .log {

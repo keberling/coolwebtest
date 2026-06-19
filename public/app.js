@@ -18,6 +18,7 @@ let activeEffect = null;
 let lastEffectIndex = -1;
 let countdownStart = Date.now();
 let effectTimeouts = [];
+let nextEffectTimeout = null;
 
 const palette = ['#00f5d4', '#9b5de5', '#fee440', '#f15bb5', '#00bbf9', '#ff6b6b', '#06d6a0'];
 
@@ -550,6 +551,19 @@ function triggerRandomEffect() {
   countdownStart = Date.now();
 }
 
+function scheduleNextEffect() {
+  clearTimeout(nextEffectTimeout);
+  nextEffectTimeout = setTimeout(() => {
+    triggerRandomEffect();
+    scheduleNextEffect();
+  }, INTERVAL_MS);
+}
+
+function skipEffect() {
+  triggerRandomEffect();
+  scheduleNextEffect();
+}
+
 function animate() {
   if (activeEffect) {
     activeEffect.draw();
@@ -565,7 +579,8 @@ function animate() {
 }
 
 window.addEventListener('resize', resize);
+document.addEventListener('click', skipEffect);
 resize();
 triggerRandomEffect();
-setInterval(triggerRandomEffect, INTERVAL_MS);
+scheduleNextEffect();
 animate();
