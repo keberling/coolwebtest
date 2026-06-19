@@ -86,6 +86,30 @@ html, body {
   flex-shrink: 0;
 }
 
+.music-toggle {
+  pointer-events: auto;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0.35rem 0.5rem;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f5f8f;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  line-height: 1;
+  min-width: 2.1rem;
+}
+
+.music-toggle:active {
+  transform: scale(0.96);
+}
+
+.music-toggle.muted {
+  opacity: 0.65;
+}
+
 .char-toggle {
   pointer-events: auto;
   font-family: inherit;

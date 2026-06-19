@@ -8,6 +8,7 @@ const caughtCountEl = document.getElementById('caught-count');
 const scoreEl = document.getElementById('score');
 const bucketList = document.getElementById('bucket-list');
 const charToggle = document.getElementById('char-toggle');
+const musicToggle = document.getElementById('music-toggle');
 
 const STATE = {
   IDLE: 'idle',
@@ -135,6 +136,17 @@ function setMessage(text) {
   messageEl.textContent = text;
 }
 
+function unlockAudio() {
+  PondMusic.unlock();
+}
+
+function updateMusicButton() {
+  const muted = PondMusic.isMuted();
+  musicToggle.textContent = muted ? '🔇' : '🎵';
+  musicToggle.classList.toggle('muted', muted);
+  musicToggle.setAttribute('aria-label', muted ? 'Turn music on' : 'Turn music off');
+}
+
 function updateUI() {
   caughtCountEl.textContent = caughtCount;
   scoreEl.textContent = score;
@@ -209,6 +221,7 @@ function calcBobberDip(intensity, speed) {
 function castLine() {
   if (gameState !== STATE.IDLE && gameState !== STATE.CELEBRATE) return;
 
+  unlockAudio();
   clearBiteTimers();
   gameState = STATE.CASTING;
   setButtons({ cast: false, reel: false });
@@ -224,6 +237,7 @@ function castLine() {
   updateRodTip();
   hook.x = rodTip.x;
   hook.y = rodTip.y;
+  PondMusic.playSplash();
 }
 
 function startWaiting() {
@@ -244,6 +258,7 @@ function startBite() {
   setMessage('Quick! Reel in!');
 
   ripples.push({ x: hook.x, y: hook.y, r: 0, life: 1 });
+  PondMusic.playBite();
 
   biteDeadline = setTimeout(() => {
     if (gameState !== STATE.BITING) return;
@@ -253,6 +268,7 @@ function startBite() {
 
 function fishGotAway() {
   clearBiteTimers();
+  PondMusic.playMiss();
   gameState = STATE.IDLE;
   bitingFish = null;
   setButtons({ cast: true, reel: false });
@@ -275,6 +291,7 @@ function reelIn() {
 
 function celebrateCatch() {
   gameState = STATE.CELEBRATE;
+  PondMusic.playCatch();
   const fish = caughtFish;
   caughtCount += 1;
   score += fish.points;
@@ -1094,10 +1111,18 @@ function loop() {
 }
 
 castBtn.addEventListener('click', castLine);
-reelBtn.addEventListener('click', reelIn);
-charToggle.addEventListener('click', toggleFisher);
+reelBtn.addEventListener('click', () => { unlockAudio(); reelIn(); });
+charToggle.addEventListener('click', () => { unlockAudio(); toggleFisher(); });
+musicToggle.addEventListener('click', () => {
+  unlockAudio();
+  PondMusic.toggleMute();
+  if (!PondMusic.isMuted()) PondMusic.start();
+  else PondMusic.stop();
+  updateMusicButton();
+});
 
-canvas.addEventListener('click', (e) => {
+canvas.addEventListener('click', () => {
+  unlockAudio();
   if (gameState === STATE.BITING) reelIn();
   else if (gameState === STATE.IDLE || gameState === STATE.CELEBRATE) castLine();
 });
@@ -1106,5 +1131,6 @@ window.addEventListener('resize', resize);
 resize();
 initScene();
 updateUI();
+updateMusicButton();
 setButtons({ cast: true, reel: false });
 loop();
