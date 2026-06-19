@@ -7,6 +7,7 @@ const biteAlert = document.getElementById('bite-alert');
 const caughtCountEl = document.getElementById('caught-count');
 const scoreEl = document.getElementById('score');
 const bucketList = document.getElementById('bucket-list');
+const charToggle = document.getElementById('char-toggle');
 
 const STATE = {
   IDLE: 'idle',
@@ -30,8 +31,13 @@ let width = 0;
 let height = 0;
 let waterTop = 0;
 let dockY = 0;
-let rodX = 0;
-let rodY = 0;
+let anglerX = 0;
+let anglerFeetY = 0;
+let anglerScale = 1;
+let fisherGender = 'boy';
+let castAnim = 0;
+let rodTip = { x: 0, y: 0 };
+let castRelease = { x: 0, y: 0 };
 
 let gameState = STATE.IDLE;
 let score = 0;
@@ -63,8 +69,9 @@ function resize() {
 
   waterTop = height * 0.3;
   dockY = waterTop - 4;
-  rodX = width * 0.12;
-  rodY = dockY - 28;
+  anglerX = width * 0.07;
+  anglerFeetY = dockY - 2;
+  anglerScale = Math.min(1.15, Math.max(0.75, height / 680));
 
   if (gameState === STATE.IDLE) {
     initScene();
@@ -164,22 +171,19 @@ function castLine() {
   setButtons({ cast: false, reel: false });
   setMessage('Casting...');
 
-  hook.startX = rodX;
-  hook.startY = rodY;
-  hook.targetX = rand(width * 0.25, width * 0.88);
+  hook.targetX = rand(width * 0.3, width * 0.88);
   hook.targetY = rand(waterTop + 55, height - 55);
-  hook.x = hook.startX;
-  hook.y = hook.startY;
-  hook.t = 0;
+  castAnim = 0;
   bobberDip = 0;
   ripples = [];
+  updateRodTip();
+  hook.x = rodTip.x;
+  hook.y = rodTip.y;
 }
 
 function startWaiting() {
   gameState = STATE.WAITING;
   setMessage('Watch the bobber dip...');
-
-  ripples.push({ x: hook.x, y: waterTop + 4, r: 0, life: 1 });
 
   biteTimer = setTimeout(() => {
     if (gameState !== STATE.WAITING) return;
@@ -249,6 +253,215 @@ function celebrateCatch() {
     setMessage('Cast your line again!');
     initScene();
   }, 2200);
+}
+
+function getCastPose() {
+  if (gameState === STATE.CASTING) return { pose: 'casting', t: castAnim };
+  if (gameState === STATE.REELING) return { pose: 'reeling', t: reelT };
+  if (gameState === STATE.BITING) return { pose: 'excited', t: 0 };
+  if (gameState === STATE.CELEBRATE) return { pose: 'happy', t: 0 };
+  if (gameState === STATE.WAITING) return { pose: 'waiting', t: 0 };
+  return { pose: 'idle', t: 0 };
+}
+
+function calcRodAngle(pose, t) {
+  const idle = -0.55;
+  if (pose === 'idle' || pose === 'waiting') {
+    return idle + Math.sin(Date.now() * 0.0015) * 0.04;
+  }
+  if (pose === 'excited') {
+    return -0.35 + Math.sin(Date.now() * 0.02) * 0.12;
+  }
+  if (pose === 'happy') {
+    return -0.2 + Math.sin(Date.now() * 0.008) * 0.08;
+  }
+  if (pose === 'reeling') {
+    return -0.4 + Math.sin(Date.now() * 0.015) * 0.15;
+  }
+  if (pose === 'casting') {
+    if (t < 0.3) {
+      const p = t / 0.3;
+      return idle - p * 0.9;
+    }
+    if (t < 0.5) {
+      const p = (t - 0.3) / 0.2;
+      return idle - 0.9 + p * 1.6;
+    }
+    return idle + 0.7 - Math.min(1, (t - 0.5) / 0.5) * 0.35;
+  }
+  return idle;
+}
+
+function calcBodyLean(pose, t) {
+  if (pose === 'casting') {
+    if (t < 0.3) return -0.06 * (t / 0.3);
+    if (t < 0.5) return -0.06 + 0.14 * ((t - 0.3) / 0.2);
+    return 0.08 - Math.min(1, (t - 0.5) / 0.5) * 0.04;
+  }
+  if (pose === 'reeling') return 0.05;
+  if (pose === 'excited') return 0.04;
+  if (pose === 'happy') return -0.03;
+  return Math.sin(Date.now() * 0.0012) * 0.015;
+}
+
+function getHandWorld(lean, s) {
+  const lx = 18;
+  const ly = -42;
+  return {
+    x: anglerX + (Math.cos(lean) * lx - Math.sin(lean) * ly) * s,
+    y: anglerFeetY + (Math.sin(lean) * lx + Math.cos(lean) * ly) * s,
+  };
+}
+
+function updateRodTip() {
+  const { pose, t } = getCastPose();
+  const lean = calcBodyLean(pose, t);
+  const rodAngle = calcRodAngle(pose, t);
+  const s = anglerScale;
+  const hand = getHandWorld(lean, s);
+  const rodLen = 78 * s;
+  rodTip.x = hand.x + Math.cos(rodAngle) * rodLen;
+  rodTip.y = hand.y + Math.sin(rodAngle) * rodLen;
+}
+
+function drawRod(handX, handY, rodAngle, s) {
+  const rodLen = 78 * s;
+  const tipX = handX + Math.cos(rodAngle) * rodLen;
+  const tipY = handY + Math.sin(rodAngle) * rodLen;
+
+  ctx.strokeStyle = '#5c3d2e';
+  ctx.lineWidth = 4 * s;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(handX, handY);
+  ctx.lineTo(tipX, tipY);
+  ctx.stroke();
+
+  ctx.strokeStyle = '#8b6914';
+  ctx.lineWidth = 2 * s;
+  ctx.beginPath();
+  ctx.moveTo(tipX - Math.cos(rodAngle) * 12 * s, tipY - Math.sin(rodAngle) * 12 * s);
+  ctx.lineTo(tipX, tipY);
+  ctx.stroke();
+
+  ctx.fillStyle = '#c0c0c0';
+  ctx.beginPath();
+  ctx.arc(tipX, tipY, 2.5 * s, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawAngler() {
+  const { pose, t } = getCastPose();
+  const lean = calcBodyLean(pose, t);
+  const rodAngle = calcRodAngle(pose, t);
+  const s = anglerScale;
+  const isGirl = fisherGender === 'girl';
+  const x = anglerX;
+  const feetY = anglerFeetY;
+  const shirt = isGirl ? '#f72585' : '#4361ee';
+  const shirtDark = isGirl ? '#b5179e' : '#3a0ca3';
+  const bottom = isGirl ? '#9d4edd' : '#2d6a4f';
+  const skin = '#ffcba4';
+  const skinShadow = '#e8a87c';
+
+  ctx.save();
+  ctx.translate(x, feetY);
+  ctx.scale(s, s);
+  ctx.rotate(lean);
+
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.beginPath();
+  ctx.ellipse(10, 4, 22, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = bottom;
+  if (isGirl) {
+    ctx.beginPath();
+    ctx.moveTo(-6, -18);
+    ctx.lineTo(26, -18);
+    ctx.lineTo(30, 2);
+    ctx.lineTo(-10, 2);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    ctx.fillRect(-4, -20, 14, 18);
+    ctx.fillRect(14, -20, 14, 18);
+  }
+
+  ctx.fillStyle = shirt;
+  ctx.fillRect(-8, -48, 36, 32);
+  ctx.fillStyle = shirtDark;
+  ctx.fillRect(-8, -48, 8, 32);
+
+  ctx.fillStyle = skin;
+  ctx.beginPath();
+  ctx.arc(10, -58, 16, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (isGirl) {
+    ctx.fillStyle = '#6a040f';
+    ctx.beginPath();
+    ctx.arc(10, -64, 17, Math.PI, 0);
+    ctx.fill();
+    ctx.fillStyle = '#9d0208';
+    ctx.beginPath();
+    ctx.arc(-8, -56, 7, 0, Math.PI * 2);
+    ctx.arc(28, -56, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ff006e';
+    ctx.beginPath();
+    ctx.arc(-8, -50, 5, 0, Math.PI * 2);
+    ctx.arc(28, -50, 5, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    ctx.fillStyle = '#5c3d2e';
+    ctx.beginPath();
+    ctx.arc(10, -64, 16, Math.PI, 0);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(4, -60, 4, 0, Math.PI * 2);
+  ctx.arc(16, -60, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#1a3a4a';
+  ctx.beginPath();
+  ctx.arc(5, -60, 2, 0, Math.PI * 2);
+  ctx.arc(17, -60, 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(6, -61, 0.9, 0, Math.PI * 2);
+  ctx.arc(18, -61, 0.9, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (pose === 'happy' || pose === 'excited') {
+    ctx.strokeStyle = '#1a3a4a';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(10, -52, 6, 0.15, Math.PI - 0.15);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = skinShadow;
+  ctx.fillRect(14, -46, 10, 14);
+  ctx.fillStyle = skin;
+  ctx.beginPath();
+  ctx.arc(19, -38, 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+
+  const hand = getHandWorld(lean, s);
+  drawRod(hand.x, hand.y, rodAngle, s);
+  updateRodTip();
+}
+
+function toggleFisher() {
+  if (gameState !== STATE.IDLE && gameState !== STATE.CELEBRATE) return;
+  fisherGender = fisherGender === 'boy' ? 'girl' : 'boy';
+  charToggle.textContent = fisherGender === 'boy' ? '👦 Boy' : '👧 Girl';
 }
 
 function drawSky() {
@@ -341,13 +554,6 @@ function drawDock() {
   ctx.arc(tx + 22, dockY - 58, 20, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle = '#4a3020';
-  ctx.lineWidth = 4;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(rodX, rodY + 10);
-  ctx.quadraticCurveTo(rodX + 30, rodY - 40, rodX + 55, rodY - 10);
-  ctx.stroke();
 }
 
 function drawWater() {
@@ -545,16 +751,36 @@ function drawFishingLine(x1, y1, x2, y2) {
 }
 
 function updateHookPosition() {
-  if (gameState === STATE.CASTING) {
-    hook.t = Math.min(1, hook.t + 0.035);
-    const ease = hook.t * hook.t;
-    hook.x = hook.startX + (hook.targetX - hook.startX) * ease;
-    hook.y = hook.startY + (hook.targetY - hook.startY) * ease;
+  updateRodTip();
 
-    if (hook.t >= 1) {
+  if (gameState === STATE.CASTING) {
+    castAnim = Math.min(1, castAnim + 0.022);
+
+    if (castAnim < 0.5) {
+      hook.x = rodTip.x;
+      hook.y = rodTip.y;
+    } else if (castAnim < 0.82) {
+      if (castAnim < 0.52) {
+        castRelease.x = rodTip.x;
+        castRelease.y = rodTip.y;
+      }
+      const flyT = (castAnim - 0.5) / 0.32;
+      hook.x = castRelease.x + (hook.targetX - castRelease.x) * flyT;
+      const drop = castRelease.y + (hook.targetY - castRelease.y) * flyT;
+      const loft = Math.sin(flyT * Math.PI) * -70 * (1 - flyT * 0.5);
+      hook.y = drop + loft;
+    } else {
+      const splashT = (castAnim - 0.82) / 0.18;
       hook.x = hook.targetX;
-      hook.y = hook.targetY;
-      startWaiting();
+      hook.y = hook.targetY + splashT * 18;
+      if (castAnim >= 1 && ripples.length < 3) {
+        ripples.push({ x: hook.targetX, y: waterTop + 6, r: 0, life: 1 });
+        ripples.push({ x: hook.targetX, y: waterTop + 6, r: 0, life: 0.7 });
+      }
+      if (castAnim >= 1) {
+        hook.y = hook.targetY;
+        startWaiting();
+      }
     }
     return;
   }
@@ -576,30 +802,36 @@ function updateHookPosition() {
   if (gameState === STATE.REELING) {
     reelT = Math.min(1, reelT + 0.05);
     const ease = 1 - Math.pow(1 - reelT, 2);
-    hook.x = hook.targetX + (rodX - hook.targetX) * ease;
-    hook.y = hook.targetY + (rodY - hook.targetY) * ease;
+    hook.x = hook.targetX + (rodTip.x - hook.targetX) * ease;
+    hook.y = hook.targetY + (rodTip.y - hook.targetY) * ease;
     bobberDip = 0;
     return;
   }
 
   if (gameState === STATE.CELEBRATE) {
-    hook.x = rodX;
-    hook.y = rodY;
+    hook.x = rodTip.x;
+    hook.y = rodTip.y;
   }
 }
 
 function drawLineAndHook() {
   const showLine = gameState !== STATE.IDLE && gameState !== STATE.CELEBRATE;
-  if (!showLine && gameState !== STATE.CELEBRATE) return;
-
   updateHookPosition();
 
-  if (gameState === STATE.IDLE) return;
+  if (!showLine) return;
 
-  drawFishingLine(rodX + 50, rodY - 8, hook.x, hook.y - 8);
+  drawFishingLine(rodTip.x, rodTip.y, hook.x, hook.y - 6);
 
-  if (gameState !== STATE.REELING) {
+  const showBobber = hook.y > waterTop - 10 && gameState !== STATE.REELING;
+  if (showBobber) {
     drawBobber(hook.x, hook.y, gameState === STATE.BITING);
+  }
+
+  if (gameState === STATE.CASTING && castAnim > 0.5 && castAnim < 0.85) {
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath();
+    ctx.arc(hook.x, hook.y, 4, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   if (gameState === STATE.BITING && bitingFish) {
@@ -658,6 +890,7 @@ function draw() {
   drawLilyPads();
   drawDock();
   drawSwimmingFish();
+  drawAngler();
   drawRipples();
   drawLineAndHook();
   drawCelebration();
@@ -671,6 +904,7 @@ function loop() {
 
 castBtn.addEventListener('click', castLine);
 reelBtn.addEventListener('click', reelIn);
+charToggle.addEventListener('click', toggleFisher);
 
 canvas.addEventListener('click', (e) => {
   if (gameState === STATE.BITING) reelIn();

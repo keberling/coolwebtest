@@ -79,6 +79,32 @@ html, body {
   display: none;
 }
 
+.hud-right {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.char-toggle {
+  pointer-events: auto;
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.35rem 0.55rem;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f5f8f;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+}
+
+.char-toggle:active {
+  transform: scale(0.96);
+}
+
 .stats {
   display: flex;
   gap: 0.4rem;
